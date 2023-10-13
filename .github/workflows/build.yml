@@ -1,1 +1,12 @@
+name: CI - Test&Build
+on: [ push,  pull_request, workflow_dispatch ]
 
+jobs:
+  build:
+    permissions: write-all
+    runs-on: LV20x64
+    steps:
+      - uses: actions/checkout@v3
+      - name: Test g-cli
+        shell: bash
+        run: ./run_test.sh
