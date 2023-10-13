@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+CURRENT_DIRECTORY=$(cygpath -w $(pwd))
+echo "CURRENT_DIRECTORY = $CURRENT_DIRECTORY"
 
-g-cli vipc -- -v "20.0 (64-bit)" "Approvals Starter Project.vipc"
-g-cli "C:\Program Files\National Instruments\LabVIEW 2020\vi.lib\addons\_JKI Toolkits\Caraya\CarayaCLIExecutionEngine.vi" -- -s "C:\Users\SAS\Documents\GitHub\ApprovalTests.LabVIEW.StarterProject" -x "C:\Users\SAS\Documents\GitHub\ApprovalTests.LabVIEW.StarterProject\UnitTestReport.xml"
+CARAYA="C:\Program Files\National Instruments\LabVIEW 2020\vi.lib\addons\_JKI Toolkits\Caraya\CarayaCLIExecutionEngine.vi"
+echo "CARAYA = $CARAYA"
+
+g-cli vipc -- -v "20.0 (64-bit)" "$CURRENT_DIRECTORY\Approvals Starter Project.vipc"
+g-cli "$CARAYA" -- -s "$CURRENT_DIRECTORY" -x "$CURRENT_DIRECTORY\UnitTestReport.xml"
