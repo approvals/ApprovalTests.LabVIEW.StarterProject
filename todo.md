@@ -1,0 +1,7 @@
+- [ ] Use the Verify functionings
+- [ ] Use Approved and Recieved
+- [ ] Add File Extensions
+- [ ] Add Reporters
+- [ ] Create a Verify JSON
+- [ ] Combine Approvals and the Assertion?
+- [ ] Move LabVIEW Approvals
