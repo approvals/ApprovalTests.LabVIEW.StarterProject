@@ -1,6 +1,6 @@
 # ApprovalTests.LabVIEW.StarterProject
 
-[![CI - Test&Build](https://github.com/approvals/ApprovalTests.LabVIEW.StarterProject/actions/workflows/build.yml/badge.svg)](https://github.com/approvals/ApprovalTests.LabVIEW.StarterProject/actions/workflows/build.yml)
+[![CI - Test&Build](../../actions/workflows/build.yml/badge.svg)](../../actions/workflows/build.yml)
 
 
 This is a starter project for:
