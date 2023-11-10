@@ -4,4 +4,4 @@
 - [ ] Add Reporters
 - [ ] Create a Verify JSON
 - [ ] Combine Approvals and the Assertion?
-- [ ] Move LabVIEW Approvals
+- [x] Move LabVIEW Approvals
