@@ -5,3 +5,4 @@
 - [ ] Create a Verify JSON
 - [ ] Combine Approvals and the Assertion?
 - [x] Move LabVIEW Approvals
+- [ ] Make Main LV Approvals CI more functional - build package
