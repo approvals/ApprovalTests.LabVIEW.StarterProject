@@ -4,5 +4,8 @@
 - [ ] Add Reporters
 - [ ] Create a Verify JSON
 - [ ] Combine Approvals and the Assertion?
-- [x] Move LabVIEW Approvals
+- [ ] Account for call stack
+- [ ] Figure out how to call correct testing assert - check calling class.thank thakaoqjueoeauuoeaueooeuuoeao,a.py,auaoeuoethankaoeuoaeuueoaoeauaoeuaoeu
+t()sudousdo reboot 0aoeuaoue,.aoeuaoeu,.'poaqeaoeukjqakj;qkj;qkj-----------------------88888888dakojnstakjve LabVIEW Approvals
+- [ ] Add LUnit Tests to main project
 - [ ] Make Main LV Approvals CI more functional - build package
