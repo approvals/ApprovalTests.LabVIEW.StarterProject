@@ -37,3 +37,10 @@ Notes:
     * Mac: [DiffMerge](https://sourcegear.com/diffmerge/)
     * Linux: [meld](http://meldmerge.org/)
 
+## GitHub Actions
+
+LabVIEW will not work by default in a GitHub Action. You need to create a Custom Runner. We have an action set up in this repo. When you clone it, it won't work because it is pointed at our machine. Here is a [link to set up your own machine](https://sas-gcli-tools.gitlab.io/) if you want (optional - not required.) If you do, just tag it with `LV20x64` or change the tag in the job file.
+
+## Need Help
+
+Reach us [here](https://sasworkshops.com/contact)
