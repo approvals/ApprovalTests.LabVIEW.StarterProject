@@ -14,9 +14,20 @@ Works on Windows. Might work on  Mac and Linux...
 
 Feel free to copy and go...
 
-## Starting Point
+## Prerequisites
 
-The tests in `approval test` should pass, and then you should delete/modify as needed to get started.
+* [LabVIEW 2020](https://www.ni.com/en/support/downloads/software-products/download.labview.html) or later - the free Community Edition is fine.
+* [VIPM](https://www.vipm.io/download/) installed
+* [Beyond Compare](https://www.scootersoftware.com/) or [Winmerge](https://winmerge.org) (free alternative) installed and directory added to path.
+
+## First Steps
+
+1. Download the zip file (Under the code button in the top right).
+2. Unzip
+3. Install vipc file by doubleclicking on it and apply.
+4. Open the Project.
+5. Run the Tests (Tools -> Caraya -> Run All Tests in Project)
+6. Once tests pass you are ready to go!
 
 Notes:
 
