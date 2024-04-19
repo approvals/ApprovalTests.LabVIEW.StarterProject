@@ -1,3 +1,4 @@
 *.lvlps
 *.aliases
 UnitTestReport.xml
+*.received.*
