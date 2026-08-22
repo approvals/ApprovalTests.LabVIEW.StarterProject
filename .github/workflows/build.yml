@@ -1,7 +1,5 @@
-name: CI - Test&Build
-on: [ push, workflow_dispatch ]
+name: Run_Example_Tests
 
-name: ci-checks
 on:
   push:
   workflow_dispatch:
@@ -13,15 +11,12 @@ permissions:
 
 jobs:
   PylaviChecks:
-    needs: PylaviChecks
     runs-on: ubuntu-latest
     container:
       image: python:3.11
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
-        with:
-          submodules: recursive
       - name: Pylavi
         run: |
           pip install pylavi
@@ -120,7 +115,6 @@ jobs:
 # Get LUnit running first
   Caraya:
     if: false 
-    runs-on: LV20x64
     runs-on: ubuntu-latest
     # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
     defaults:
