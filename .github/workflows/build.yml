@@ -1,17 +1,173 @@
 name: CI - Test&Build
 on: [ push, workflow_dispatch ]
 
-jobs:
-  build:
-    runs-on: LV20x64
-    steps:
-      - uses: actions/checkout@v3
-      - name: Test g-cli
-        shell: bash
-        run: ./run_test.sh
-      - name: Test Summary
-        uses: test-summary/action@v2
-        with:
-          paths: "UnitTestReport.xml"
-        if: always()
+name: ci-checks
+on:
+  push:
+  workflow_dispatch:
+env: 
+  PACKAGE_VERSION: 3.0.0
+permissions:
+  checks: write
+  pull-requests: write # only required if `comment: true` was enabled
 
+jobs:
+  PylaviChecks:
+    needs: PylaviChecks
+    runs-on: ubuntu-latest
+    container:
+      image: python:3.11
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Pylavi
+        run: |
+          pip install pylavi
+          ./scripts/pylavi_check.sh
+
+
+
+
+
+  LUnit:     
+    needs: PylaviChecks
+    runs-on: ubuntu-latest
+    # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
+    defaults:
+      run:
+        shell: bash
+
+    # The official LabVIEW container image from NI
+    container:
+      image: nationalinstruments/labview:2026q3-linux
+      # --init injects a real init (tini) as PID 1 ahead of the entrypoint so orphaned/killed LabVIEW processes actually get reaped instead of piling up as zombies.
+      options: --init
+
+    env:
+      LABVIEW_IMAGE: 2026q3-linux
+      VIPM_RELEASE_TYPE: preview
+      VIPM_VERSION: 26.3.0-3991
+      VIPM_COMMUNITY_EDITION: true
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
+      VIPM_NON_INTERACTIVE: 1    
+      VIPM_ASSUME_YES: 1
+      VIPM_DEBUG: 0
+
+    steps:
+      - name: Install git
+        run: |
+          apt-get update && apt-get install -y git >/dev/null
+      - name: Checkout code
+        uses: actions/checkout@v6
+      - name: Setup Container
+        run: |
+          ./scripts/setup_container.sh
+      # Use GitHub's caching action to cache VIPM's package cache.
+      - name: Cache VIPM packages
+        id: cache-vipm
+        uses: actions/cache@v5
+        env:
+          # Increment this to invalidate the cache (restore-keys included).
+          CACHE_VERSION: 1
+        with:
+          path: |
+            /usr/local/natinst/LabVIEW*/
+            /usr/local/jki/vipm/cache/
+            /usr/local/jki/vipm/db/
+          # Key includes hashes of the project package manifests (.vipc and .dragon files)
+          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('approvals-dev.vipc', 'error.dragon') }}
+          restore-keys: |
+            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
+            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
+
+      - name: VIPM Install Packages
+        if: steps.cache-vipm.outputs.cache-hit != 'true'
+        run: |
+          source ./scripts/setup_display.sh
+          echo "Starting LabVIEW"
+          /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
+          vipm install "approvals-dev.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
+
+      - name: VIPM List Installed packages
+        run: |
+          source ./scripts/setup_display.sh
+          vipm list --installed || true
+
+      - name: Unit Tests
+        run: |
+          source ./scripts/setup_display.sh
+          g-cli --kill --kill-timeout 5000 -- -r Lunit.UnitTestReport.xml Lunit.Tests
+
+          
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # always run even if the previous step fails
+        with:
+          report_paths: '*UnitTestReport.xml'
+          include_passed: true
+          
+      - name: Grab Artifacts
+        if: success() || failure() # always run even if the previous step fails
+        uses: actions/upload-artifact@v6
+        with:
+          name: lunit-test-reports 
+          path: |
+            *UnitTestReport.xml
+            **/*.received.*
+
+# Get LUnit running first
+  Caraya:
+    if: false 
+    runs-on: LV20x64
+    runs-on: ubuntu-latest
+    # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
+    defaults:
+      run:
+        shell: bash
+
+    # The official LabVIEW container image from NI
+    container:
+      image: nationalinstruments/labview:2026q3-linux
+      # --init injects a real init (tini) as PID 1 ahead of the entrypoint so orphaned/killed LabVIEW processes actually get reaped instead of piling up as zombies.
+      options: --init
+
+    env:
+      LABVIEW_IMAGE: 2026q3-linux
+      VIPM_RELEASE_TYPE: preview
+      VIPM_VERSION: 26.3.0-3991
+      VIPM_COMMUNITY_EDITION: true
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
+      VIPM_NON_INTERACTIVE: 1    
+      VIPM_ASSUME_YES: 1
+      VIPM_DEBUG: 0
+
+    steps:
+      - name: Install git
+        run: |
+          apt-get update && apt-get install -y git >/dev/null
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          submodules: recursive
+      - name: Setup Container
+        run: |
+          ./scripts/setup_container.sh
+      # Use GitHub's caching action to cache VIPM's package cache.
+      - name: Cache VIPM packages
+        id: cache-vipm
+        uses: actions/cache@v5
+        env:
+          # Increment this to invalidate the cache (restore-keys included).
+          CACHE_VERSION: 2
+        with:
+          path: |
+            /usr/local/natinst/LabVIEW*/
+            /usr/local/jki/vipm/cache/
+            /usr/local/jki/vipm/db/
+          # Key includes hashes of the project package manifests (.vipc and .dragon files)
+          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('approvals-dev.vipc', 'error.dragon') }}
+          restore-keys: |
+            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
+            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-

@@ -1,4 +1,5 @@
 *.lvlps
 *.aliases
-UnitTestReport.xml
+*UnitTestReport.xml
 *.received.*
+*.UserState
