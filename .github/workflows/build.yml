@@ -20,11 +20,14 @@ jobs:
       - name: Pylavi
         run: |
           pip install pylavi
-          ./scripts/pylavi_check.sh
-
-
-
-
+          # needs to all be in 2020
+          vi_validate \
+          --path Source \
+          --path Tests \
+          --gt 20 --lt 21 \
+          --no-code \
+          --breakpoints \
+          --no-suspend-on-run
 
   LUnit:     
     needs: PylaviChecks
