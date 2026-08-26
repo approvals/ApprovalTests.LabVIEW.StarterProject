@@ -3,7 +3,20 @@ name: Run_Example_Tests
 on:
   push:
   workflow_dispatch:
-env: 
+  # Lets other repos (e.g. ApprovalTests.LabVIEW's release pipeline) call this workflow directly
+  # and wait on it as a normal job dependency - no cross-repo token needed since the called job
+  # runs inside the caller's own workflow run.
+  workflow_call:
+    inputs:
+      package_artifact_name:
+        description: 'Name of a package artifact already uploaded in this run to install before testing'
+        type: string
+        required: false
+      starter_ref:
+        description: 'Ref of this repo to check out. Defaults to the ref that triggered the run, which is wrong when called from another repo, so callers should always set this explicitly.'
+        type: string
+        required: false
+env:
   PACKAGE_VERSION: 3.0.0
 permissions:
   checks: write
@@ -17,6 +30,11 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v6
+        with:
+          # Pinned explicitly: when called via workflow_call from another repo, the default
+          # checkout target is the CALLER's repo/ref, not this one.
+          repository: approvals/ApprovalTests.LabVIEW.StarterProject
+          ref: ${{ inputs.starter_ref || github.ref }}
       - name: Pylavi
         run: |
           pip install pylavi
@@ -59,6 +77,11 @@ jobs:
           apt-get update && apt-get install -y git >/dev/null
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          # Pinned explicitly: when called via workflow_call from another repo, the default
+          # checkout target is the CALLER's repo/ref, not this one.
+          repository: approvals/ApprovalTests.LabVIEW.StarterProject
+          ref: ${{ inputs.starter_ref || github.ref }}
       - name: Setup Container
         run: |
           ./scripts/setup_container.sh
@@ -87,6 +110,23 @@ jobs:
           echo "Starting LabVIEW"
           /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
           vipm install "Approvals.StarterProject.Lunit.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
+
+      - name: Download Approval Tests package
+        # Same workflow run as the caller (workflow_call jobs execute inside the caller's run),
+        # so no cross-repo repository/run-id/token is needed - just the artifact name.
+        if: inputs.package_artifact_name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.package_artifact_name }}
+          path: downloaded-package
+
+      - name: Install downloaded Approval Tests package
+        if: inputs.package_artifact_name != ''
+        run: |
+          source ./scripts/setup_display.sh
+          package=$(ls downloaded-package/*.vip)
+          echo "Installing freshly built package: ${package}"
+          vipm install "${package}" --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 --show-progress
 
       - name: VIPM List Installed packages
         run: |
