@@ -75,7 +75,7 @@ jobs:
             /usr/local/jki/vipm/cache/
             /usr/local/jki/vipm/db/
           # Key includes hashes of the project package manifests (.vipc and .dragon files)
-          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('approvals-dev.vipc', 'error.dragon') }}
+          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('Approvals.StarterProject.Lunit.vipc') }}
           restore-keys: |
             vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
             vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
@@ -86,7 +86,7 @@ jobs:
           source ./scripts/setup_display.sh
           echo "Starting LabVIEW"
           /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
-          vipm install "approvals-dev.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
+          vipm install "Approvals.StarterProject.Lunit.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
 
       - name: VIPM List Installed packages
         run: |
@@ -96,14 +96,16 @@ jobs:
       - name: Unit Tests
         run: |
           source ./scripts/setup_display.sh
-          g-cli --kill --kill-timeout 5000 -- -r Lunit.UnitTestReport.xml Lunit.Tests
+          mkdir -p reports
+          rm reports/Lunit.UnitTestReport.xml || true
+          g-cli --kill --kill-timeout 5000 lunit -- -r Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
 
           
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6
         if: success() || failure() # always run even if the previous step fails
         with:
-          report_paths: '*UnitTestReport.xml'
+          report_paths: 'reports/*UnitTestReport.xml'
           include_passed: true
           
       - name: Grab Artifacts
@@ -112,7 +114,7 @@ jobs:
         with:
           name: lunit-test-reports 
           path: |
-            *UnitTestReport.xml
+            reports/*UnitTestReport.xml
             **/*.received.*
 
 # Get LUnit running first

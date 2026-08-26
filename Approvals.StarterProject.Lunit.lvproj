@@ -12,6 +12,10 @@
 		<Property Name="server.vi.callsEnabled" Type="Bool">true</Property>
 		<Property Name="server.vi.propertiesEnabled" Type="Bool">true</Property>
 		<Property Name="specify.custom.address" Type="Bool">false</Property>
+		<Item Name="Tests" Type="Folder">
+			<Item Name="Simple Tests.lvclass" Type="LVClass" URL="../Lunit.Tests/Simple Tests/Simple Tests.lvclass"/>
+		</Item>
+		<Item Name="lib_LUnit.Extension.lvlib" Type="Library" URL="/&lt;vilib&gt;/SAS/Approval Tests/Extensions/LUnit.Extension/lib_LUnit.Extension.lvlib"/>
 		<Item Name="Person.lvclass" Type="LVClass" URL="../Common/Person/Person.lvclass"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build"/>
