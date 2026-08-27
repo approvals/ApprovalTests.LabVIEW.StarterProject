@@ -103,12 +103,21 @@ jobs:
             vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
             vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
 
-      - name: VIPM Install Packages
-        if: steps.cache-vipm.outputs.cache-hit != 'true'
+      # Must run every time, regardless of cache-hit: this is the only thing that starts LabVIEW,
+      # and every later step (VIPM installs/listing, the tests themselves) needs it running.
+      # Previously this lived inside "VIPM Install Packages" below, which is skipped on a cache
+      # hit - so on a cache hit LabVIEW was never started, and VIPM/tests ran against no LabVIEW
+      # instance at all.
+      - name: Start LabVIEW
         run: |
           source ./scripts/setup_display.sh
           echo "Starting LabVIEW"
           /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
+
+      - name: VIPM Install Packages
+        if: steps.cache-vipm.outputs.cache-hit != 'true'
+        run: |
+          source ./scripts/setup_display.sh
           vipm install "Approvals.StarterProject.Lunit.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
 
       - name: Download Approval Tests package
