@@ -22,9 +22,6 @@
 	<Item Name="Simple Tests.ctl" Type="Class Private Data" URL="Simple Tests.ctl">
 		<Property Name="NI.LibItem.Scope" Type="Int">2</Property>
 	</Item>
-	<Item Name="Private" Type="Folder">
-		<Property Name="NI.LibItem.Scope" Type="Int">2</Property>
-	</Item>
 	<Item Name="Test Method Template.vit" Type="VI" URL="../Test Method Template.vit">
 		<Property Name="NI.ClassItem.ConnectorPane" Type="Bin">)!#!!!!!!!)!"1!&amp;!!!-!%!!!@````]!!!!"!!%!!!%'!!!!#!!-1#%'=X2B&gt;(6T!!!,1!-!"'.P:'5!!""!-0````]'=W^V=G.F!!!71&amp;!!!Q!!!!%!!AFF=H*P=C"P&gt;81!"!!!!#Z!=!!?!!!7&amp;&amp;.J&lt;8"M:3"5:8.U=SZM&gt;G.M98.T!!!.6'6T&gt;#"$98.F)%^V&gt;!!O1(!!(A!!&amp;B24;7VQ&lt;'5A6'6T&gt;(-O&lt;(:D&lt;'&amp;T=Q!!$&amp;2F=X1A1W&amp;T:3"*&lt;A!!91$Q!!Q!!Q!%!!1!"1!%!!1!"!!%!!1!"!!%!!9$!!"Y!!!*!!!!!!!!!!!!!!!.#Q!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")!!!U!!!!-!!!!!!!!!!!!!!%!"Q!!!!!</Property>
 		<Property Name="NI.ClassItem.ExecutionSystem" Type="Int">-1</Property>
@@ -34,7 +31,18 @@
 		<Property Name="NI.ClassItem.Priority" Type="Int">1</Property>
 		<Property Name="NI.ClassItem.State" Type="Int">1082139152</Property>
 	</Item>
+	<Item Name="Verify Hello World.approved.txt" Type="Document" URL="../Verify Hello World.approved.txt"/>
 	<Item Name="Verify Hello World.vi" Type="VI" URL="../Verify Hello World.vi">
+		<Property Name="NI.ClassItem.ConnectorPane" Type="Bin">)!#!!!!!!!)!"1!&amp;!!!-!%!!!@````]!!!!"!!%!!!%'!!!!#!!-1#%'=X2B&gt;(6T!!!,1!-!"'.P:'5!!""!-0````]'=W^V=G.F!!!71&amp;!!!Q!!!!%!!AFF=H*P=C"P&gt;81!"!!!!#Z!=!!?!!!7&amp;&amp;.J&lt;8"M:3"5:8.U=SZM&gt;G.M98.T!!!.6'6T&gt;#"$98.F)%^V&gt;!!O1(!!(A!!&amp;B24;7VQ&lt;'5A6'6T&gt;(-O&lt;(:D&lt;'&amp;T=Q!!$&amp;2F=X1A1W&amp;T:3"*&lt;A!!91$Q!!Q!!Q!%!!1!"1!%!!1!"!!%!!1!"!!%!!9$!!"Y!!!*!!!!!!!!!!!!!!!.#Q!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")!!!U!!!!-!!!!!!!!!!!!!!%!"Q!!!!!</Property>
+		<Property Name="NI.ClassItem.ExecutionSystem" Type="Int">-1</Property>
+		<Property Name="NI.ClassItem.Flags" Type="Int">0</Property>
+		<Property Name="NI.ClassItem.IsStaticMethod" Type="Bool">true</Property>
+		<Property Name="NI.ClassItem.MethodScope" Type="UInt">1</Property>
+		<Property Name="NI.ClassItem.Priority" Type="Int">1</Property>
+		<Property Name="NI.ClassItem.State" Type="Int">1074278928</Property>
+	</Item>
+	<Item Name="Verify Person.approved.txt" Type="Document" URL="../Verify Person.approved.txt"/>
+	<Item Name="Verify Person.vi" Type="VI" URL="../Verify Person.vi">
 		<Property Name="NI.ClassItem.ConnectorPane" Type="Bin">)!#!!!!!!!)!"1!&amp;!!!-!%!!!@````]!!!!"!!%!!!%'!!!!#!!-1#%'=X2B&gt;(6T!!!,1!-!"'.P:'5!!""!-0````]'=W^V=G.F!!!71&amp;!!!Q!!!!%!!AFF=H*P=C"P&gt;81!"!!!!#Z!=!!?!!!7&amp;&amp;.J&lt;8"M:3"5:8.U=SZM&gt;G.M98.T!!!.6'6T&gt;#"$98.F)%^V&gt;!!O1(!!(A!!&amp;B24;7VQ&lt;'5A6'6T&gt;(-O&lt;(:D&lt;'&amp;T=Q!!$&amp;2F=X1A1W&amp;T:3"*&lt;A!!91$Q!!Q!!Q!%!!1!"1!%!!1!"!!%!!1!"!!%!!9$!!"Y!!!*!!!!!!!!!!!!!!!.#Q!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")!!!U!!!!-!!!!!!!!!!!!!!%!"Q!!!!!</Property>
 		<Property Name="NI.ClassItem.ExecutionSystem" Type="Int">-1</Property>
 		<Property Name="NI.ClassItem.Flags" Type="Int">0</Property>
