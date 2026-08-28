@@ -91,10 +91,14 @@ jobs:
         uses: actions/cache@v5
         env:
           # Increment this to invalidate the cache (restore-keys included).
-          # Bumped: suspect a cache-hit restores package *files* without whatever post-install
-          # step registers the JSONtext object-serialization add-on, causing Verify Person.vi
-          # to receive a class object JSONtext can't serialize (received.txt == "null").
-          CACHE_VERSION: 2
+          # Bumped: setup_container.sh was pulling a rolling "latest preview" VIPM build, which
+          # could drift to a different VIPM CLI version than the one validated in the base repo
+          # and produce inconsistent post-install/mass-compile behavior for the JSONtext
+          # object-serialization add-on, causing Verify Person.vi to receive a class object
+          # JSONtext can't serialize (received.txt == "null"). setup_container.sh now pins VIPM
+          # to the same build as ApprovalTests.LabVIEW; bumping here forces a clean install under
+          # that pinned build instead of reusing a cache built with the old rolling download.
+          CACHE_VERSION: 3
         with:
           path: |
             /usr/local/natinst/LabVIEW*/
