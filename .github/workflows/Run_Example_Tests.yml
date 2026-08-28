@@ -149,6 +149,18 @@ jobs:
           source ./scripts/setup_display.sh
           vipm list --installed || true
 
+      # Debugging Verify Person.vi -> JSONtext LVClass Serializer returning "null": check whether
+      # more than one compiled Person.lvclass (or serializer plugin VI) exists on this machine,
+      # which could make the serializer's class resolution ambiguous. Remove once resolved.
+      - name: Debug - find duplicate Person.lvclass / serializer files
+        run: |
+          echo "--- Person.lvclass files on disk ---"
+          find / -iname "Person.lvclass" -not -path "*/proc/*" 2>/dev/null -exec ls -la {} \;
+          echo "--- JSONtext LVClass Serializer files on disk ---"
+          find / -iname "*LVClass Serializer*" -not -path "*/proc/*" 2>/dev/null -exec ls -la {} \;
+          echo "--- sas_lib_approval_tests install location ---"
+          find / -iname "*approval*tests*" -not -path "*/proc/*" -not -path "*/__w/*" 2>/dev/null
+
       - name: Unit Tests
         run: |
           source ./scripts/setup_display.sh
