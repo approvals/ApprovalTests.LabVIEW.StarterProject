@@ -150,7 +150,7 @@ jobs:
           source ./scripts/setup_display.sh
           mkdir -p reports
           rm reports/Lunit.UnitTestReport.xml || true
-          g-cli --kill --kill-timeout 5000  lunit -- --parallel -r reports/Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
+          g-cli --kill --kill-timeout 5000  lunit -- -r reports/Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
 
           
       - name: Publish Test Report
