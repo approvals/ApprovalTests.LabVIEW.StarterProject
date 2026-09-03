@@ -156,14 +156,43 @@ jobs:
       # where the same files on Windows resolve cleanly. Mass-compiling forces LabVIEW to
       # re-resolve and re-save those links against the actual on-disk paths, which should fix
       # dynamic dispatch silently falling back to the parent class's "return null" stub.
-      - name: Mass Compile PNR/JDP Science packages
+      #
+      # First attempt used `labview -mc <dir>` directly - that opens the interactive
+      # file-selection dialog and just hangs under Xvfb (both invocations timed out at 180s,
+      # confirmed via a follow-up debug run). Switching to LabVIEW CLI's built-in MassCompile
+      # operation instead - it's NI's own headless-first tool (see
+      # /usr/local/natinst/nilvcli/Operations referenced in LabVIEWCLI's own error strings,
+      # which is the Linux install location), unlike the interactive `-mc` flag on labview
+      # itself. Exact flag names aren't confirmed yet, so this step is defensive: it locates
+      # the binary, prints its own --help before doing anything (so the real syntax is in the
+      # log even if the guessed invocation below is wrong), and every command has `|| true` so
+      # one failed guess doesn't block the rest of the job or hide the diagnostics.
+      - name: Mass Compile PNR/JDP Science packages (LabVIEW CLI)
         run: |
           source ./scripts/setup_display.sh
-          pkill -f labview || true
-          sleep 2
           LV_DIR="/usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64"
-          timeout 180 "$LV_DIR/labview" -mc "$LV_DIR/vi.lib/PNR" || echo "mass compile of vi.lib/PNR exited $?"
-          timeout 180 "$LV_DIR/labview" -mc "$LV_DIR/vi.lib/JDP Science" || echo "mass compile of vi.lib/JDP Science exited $?"
+
+          echo "--- Looking for LabVIEWCLI ---"
+          find /usr/local/natinst -maxdepth 4 -iname "*labview*cli*" 2>/dev/null
+          CLI=$(find /usr/local/natinst -iname "LabVIEWCLI" -type f 2>/dev/null | head -1)
+          echo "CLI=${CLI:-<not found>}"
+
+          if [ -z "$CLI" ]; then
+            echo "LabVIEWCLI binary not found - skipping mass compile, leaving Unit Tests to run against whatever is installed."
+            exit 0
+          fi
+
+          echo "--- LabVIEWCLI --help ---"
+          "$CLI" --help 2>&1 || true
+
+          echo "--- Attempting MassCompile on vi.lib/PNR ---"
+          timeout 180 "$CLI" -OperationName MassCompile -DirPath "$LV_DIR/vi.lib/PNR" -LabVIEWPath "$LV_DIR/labview" \
+            || echo "MassCompile of vi.lib/PNR exited $?"
+
+          echo "--- Attempting MassCompile on vi.lib/JDP Science ---"
+          timeout 180 "$CLI" -OperationName MassCompile -DirPath "$LV_DIR/vi.lib/JDP Science" -LabVIEWPath "$LV_DIR/labview" \
+            || echo "MassCompile of vi.lib/JDP Science exited $?"
+
           pkill -f labview || true
           sleep 2
           echo "Starting LabVIEW"
