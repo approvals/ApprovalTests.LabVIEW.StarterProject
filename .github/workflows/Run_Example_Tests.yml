@@ -183,14 +183,18 @@ jobs:
           fi
 
           echo "--- LabVIEWCLI -OperationName MassCompile -Help ---"
-          # Run 2 found the binary and it connected to LabVIEW fine, but "-DirPath" was
-          # rejected as an illegal argument (Error -350051). The global --help doesn't list
-          # per-operation parameters - only "-OperationName <op> -Help" does, per the global
-          # help text itself. Get the real parameter names before guessing again.
-          "$CLI" -OperationName MassCompile -Help 2>&1 || true
+          # Run 3 tried this without -LabVIEWPath and got Error -350004 ("path to LabVIEW is
+          # unknown") instead of the actual operation help - -Help apparently still needs
+          # -LabVIEWPath to connect first. Fixed below. Also: the underlying VI Server method
+          # (found via lvai_vi_server_reference against the local LabVIEW install) names its
+          # parameter literally "Directory to Compile" - LabVIEWCLI's other flags
+          # (-LabVIEWPath, -LogFilePath, -AdditionalOperationDirectory) are all PascalCase
+          # runs of the words with no spaces, so "-DirectoryToCompile" is now the leading
+          # guess, tried first.
+          "$CLI" -OperationName MassCompile -Help -LabVIEWPath "$LV_DIR/labview" 2>&1 || true
 
           echo "--- Attempting MassCompile on vi.lib/PNR (guessing likely flag names) ---"
-          for flag in -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
+          for flag in -DirectoryToCompile -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
             echo "trying $flag ..."
             timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/PNR" -LabVIEWPath "$LV_DIR/labview" \
               && { echo "SUCCEEDED with $flag"; break; } \
@@ -198,7 +202,7 @@ jobs:
           done
 
           echo "--- Attempting MassCompile on vi.lib/JDP Science (guessing likely flag names) ---"
-          for flag in -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
+          for flag in -DirectoryToCompile -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
             echo "trying $flag ..."
             timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/JDP Science" -LabVIEWPath "$LV_DIR/labview" \
               && { echo "SUCCEEDED with $flag"; break; } \
