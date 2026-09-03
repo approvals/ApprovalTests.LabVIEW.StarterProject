@@ -182,16 +182,28 @@ jobs:
             exit 0
           fi
 
-          echo "--- LabVIEWCLI --help ---"
-          "$CLI" --help 2>&1 || true
+          echo "--- LabVIEWCLI -OperationName MassCompile -Help ---"
+          # Run 2 found the binary and it connected to LabVIEW fine, but "-DirPath" was
+          # rejected as an illegal argument (Error -350051). The global --help doesn't list
+          # per-operation parameters - only "-OperationName <op> -Help" does, per the global
+          # help text itself. Get the real parameter names before guessing again.
+          "$CLI" -OperationName MassCompile -Help 2>&1 || true
 
-          echo "--- Attempting MassCompile on vi.lib/PNR ---"
-          timeout 180 "$CLI" -OperationName MassCompile -DirPath "$LV_DIR/vi.lib/PNR" -LabVIEWPath "$LV_DIR/labview" \
-            || echo "MassCompile of vi.lib/PNR exited $?"
+          echo "--- Attempting MassCompile on vi.lib/PNR (guessing likely flag names) ---"
+          for flag in -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
+            echo "trying $flag ..."
+            timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/PNR" -LabVIEWPath "$LV_DIR/labview" \
+              && { echo "SUCCEEDED with $flag"; break; } \
+              || echo "$flag failed"
+          done
 
-          echo "--- Attempting MassCompile on vi.lib/JDP Science ---"
-          timeout 180 "$CLI" -OperationName MassCompile -DirPath "$LV_DIR/vi.lib/JDP Science" -LabVIEWPath "$LV_DIR/labview" \
-            || echo "MassCompile of vi.lib/JDP Science exited $?"
+          echo "--- Attempting MassCompile on vi.lib/JDP Science (guessing likely flag names) ---"
+          for flag in -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
+            echo "trying $flag ..."
+            timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/JDP Science" -LabVIEWPath "$LV_DIR/labview" \
+              && { echo "SUCCEEDED with $flag"; break; } \
+              || echo "$flag failed"
+          done
 
           pkill -f labview || true
           sleep 2
