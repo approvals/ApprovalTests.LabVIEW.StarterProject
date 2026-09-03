@@ -149,6 +149,27 @@ jobs:
           source ./scripts/setup_display.sh
           vipm list --installed || true
 
+      # Debug fix attempt: the resource-dump comparison above showed the Linux-installed
+      # pnr_lib_jsontext_object_serialization VIs (e.g. Generic Object Serializer/LVObject to
+      # JSON.vi) have UNRESOLVED link-info entries for their own owning class and sibling VIs
+      # ("!Generic Object Serializer.lvclass" / bare "Handle Type.vi", no <vilib>-relative path)
+      # where the same files on Windows resolve cleanly. Mass-compiling forces LabVIEW to
+      # re-resolve and re-save those links against the actual on-disk paths, which should fix
+      # dynamic dispatch silently falling back to the parent class's "return null" stub.
+      - name: Mass Compile PNR/JDP Science packages
+        run: |
+          source ./scripts/setup_display.sh
+          pkill -f labview || true
+          sleep 2
+          LV_DIR="/usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64"
+          timeout 180 "$LV_DIR/labview" -mc "$LV_DIR/vi.lib/PNR" || echo "mass compile of vi.lib/PNR exited $?"
+          timeout 180 "$LV_DIR/labview" -mc "$LV_DIR/vi.lib/JDP Science" || echo "mass compile of vi.lib/JDP Science exited $?"
+          pkill -f labview || true
+          sleep 2
+          echo "Starting LabVIEW"
+          "$LV_DIR/labview" --headless &
+          sleep 3
+
       - name: Unit Tests
         run: |
           source ./scripts/setup_display.sh
