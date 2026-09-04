@@ -11,27 +11,35 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
-# ASSUMPTION, unverified against a real container run: NI's prebuilt Windows image ships VIPM CLI
-# and g-cli preinstalled and on PATH (per https://github.com/ni/labview-for-containers
-# docs/windows-prebuilt.md - "NI Package Manager and NI Package Manager CLI" is listed as
-# preinstalled). Falls back to a couple of likely Program Files locations if not.
+# Confirmed on 2026-09-04 CI run: vipm.exe is preinstalled per NI's docs, but NOT on PATH and NOT
+# at the two guessed Program Files locations - so this searches every plausible install tree
+# instead of guessing a single path, and prints what it finds either way for diagnostics.
 function Find-Tool {
-    param([string]$Name, [string[]]$FallbackPaths)
+    param([string]$Name)
     $cmd = Get-Command $Name -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-    foreach ($p in $FallbackPaths) {
-        if (Test-Path $p) { return $p }
+    if ($cmd) {
+        Write-Host "Found $Name on PATH: $($cmd.Source)"
+        return $cmd.Source
     }
-    throw "Could not locate $Name on PATH or in: $($FallbackPaths -join ', ')"
+    $roots = @(
+        "${env:ProgramFiles}\National Instruments",
+        "${env:ProgramFiles(x86)}\National Instruments",
+        "${env:ProgramFiles}\JKI",
+        "${env:ProgramFiles(x86)}\JKI",
+        "${env:ProgramData}\National Instruments",
+        "${env:LOCALAPPDATA}\National Instruments"
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    Write-Host "$Name not on PATH - searching: $($roots -join ', ')"
+    $found = @($roots | ForEach-Object { Get-ChildItem -Path $_ -Filter $Name -Recurse -File -ErrorAction SilentlyContinue })
+    if ($found.Count -gt 0) {
+        Write-Host "Found $($found.Count) candidate(s): $($found.FullName -join ', ')"
+        return $found[0].FullName
+    }
+    throw "Could not locate $Name on PATH or under: $($roots -join ', ')"
 }
 
-$vipm = Find-Tool -Name "vipm.exe" -FallbackPaths @(
-    "${env:ProgramFiles}\National Instruments\VI Package Manager\VIPM.exe",
-    "${env:ProgramFiles(x86)}\National Instruments\VI Package Manager\VIPM.exe"
-)
-$gcli = Find-Tool -Name "g-cli.exe" -FallbackPaths @(
-    "${env:ProgramFiles}\National Instruments\g-cli\g-cli.exe"
-)
+$vipm = Find-Tool -Name "vipm.exe"
+$gcli = Find-Tool -Name "g-cli.exe"
 
 function Invoke-Vipm {
     param([string[]]$VipmArgs)
