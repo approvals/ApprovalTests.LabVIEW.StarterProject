@@ -47,34 +47,37 @@ jobs:
           --breakpoints \
           --no-suspend-on-run
 
-  LUnit:     
+  # Runs on a Windows GitHub-hosted runner against NI's official LabVIEW Windows container image.
+  # Windows containers can't be used as a job-level `container:` on GitHub-hosted runners the way
+  # the Linux job above does, so each `docker run` below is its own fresh, ephemeral container -
+  # nothing installed or started in one step is visible to the next. That's why the whole
+  # package-install + test-run sequence lives in a single docker run invoking one script
+  # (scripts/windows/run-lunit-tests.ps1), mirroring the pattern NI uses for its own
+  # cicd-examples (see masscompile-windows-container.yml / run-vi-analyzer-windows-container.yml
+  # in https://github.com/ni/labview-for-containers).
+  #
+  # Per https://github.com/ni/labview-for-containers/blob/main/docs/windows-prebuilt.md, this image
+  # ships LabVIEW, LabVIEWCLI, and NI Package Manager/VIPM CLI preinstalled - unlike the Linux
+  # image there is no apt-get/curl'd .deb install step, and no Xvfb/display setup, needed.
+  #
+  # NOTE: several specifics below (vipm.exe's exact path/flags on Windows, where VIPM installs
+  # g-cli.exe, whether PATH already includes them) are carried over from the Linux job's syntax
+  # but have not been run against a real Windows container - scripts/windows/run-lunit-tests.ps1
+  # does its own tool discovery and prints what it finds, so a first real CI run will surface any
+  # wrong assumption quickly rather than silently.
+  LUnit:
     needs: PylaviChecks
-    runs-on: ubuntu-latest
-    # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
-    defaults:
-      run:
-        shell: bash
-
-    # The official LabVIEW container image from NI
-    container:
-      image: nationalinstruments/labview:2026q3-linux
-      # --init injects a real init (tini) as PID 1 ahead of the entrypoint so orphaned/killed LabVIEW processes actually get reaped instead of piling up as zombies.
-      options: --init
+    runs-on: windows-latest
 
     env:
-      LABVIEW_IMAGE: 2026q3-linux
-      VIPM_RELEASE_TYPE: preview
-      VIPM_VERSION: 26.3.0-3991
-      VIPM_COMMUNITY_EDITION: true
-      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
-      VIPM_NON_INTERACTIVE: 1    
+      LABVIEW_IMAGE: 2026q3-windows
+      LABVIEW_VERSION_YEAR: 2026
+      LABVIEW_BITNESS: 64
+      VIPM_NON_INTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
 
     steps:
-      - name: Install git
-        run: |
-          apt-get update && apt-get install -y git >/dev/null
       - name: Checkout code
         uses: actions/checkout@v6
         with:
@@ -82,50 +85,9 @@ jobs:
           # checkout target is the CALLER's repo/ref, not this one.
           repository: approvals/ApprovalTests.LabVIEW.StarterProject
           ref: ${{ inputs.starter_ref || github.ref }}
-      - name: Setup Container
-        run: |
-          ./scripts/setup_container.sh
-      # Use GitHub's caching action to cache VIPM's package cache.
-      - name: Cache VIPM packages
-        id: cache-vipm
-        uses: actions/cache@v5
-        env:
-          # Increment this to invalidate the cache (restore-keys included).
-          # Bumped: setup_container.sh was pulling a rolling "latest preview" VIPM build, which
-          # could drift to a different VIPM CLI version than the one validated in the base repo
-          # and produce inconsistent post-install/mass-compile behavior for the JSONtext
-          # object-serialization add-on, causing Verify Person.vi to receive a class object
-          # JSONtext can't serialize (received.txt == "null"). setup_container.sh now pins VIPM
-          # to the same build as ApprovalTests.LabVIEW; bumping here forces a clean install under
-          # that pinned build instead of reusing a cache built with the old rolling download.
-          CACHE_VERSION: 3
-        with:
-          path: |
-            /usr/local/natinst/LabVIEW*/
-            /usr/local/jki/vipm/cache/
-            /usr/local/jki/vipm/db/
-          # Key includes hashes of the project package manifests (.vipc and .dragon files)
-          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('Approvals.StarterProject.Lunit.vipc') }}
-          restore-keys: |
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
 
-      # Must run every time, regardless of cache-hit: this is the only thing that starts LabVIEW,
-      # and every later step (VIPM installs/listing, the tests themselves) needs it running.
-      # Previously this lived inside "VIPM Install Packages" below, which is skipped on a cache
-      # hit - so on a cache hit LabVIEW was never started, and VIPM/tests ran against no LabVIEW
-      # instance at all.
-      - name: Start LabVIEW
-        run: |
-          source ./scripts/setup_display.sh
-          echo "Starting LabVIEW"
-          /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
-
-      - name: VIPM Install Packages
-        if: steps.cache-vipm.outputs.cache-hit != 'true'
-        run: |
-          source ./scripts/setup_display.sh
-          vipm install "Approvals.StarterProject.Lunit.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
+      - name: Pull LabVIEW container image
+        run: docker pull nationalinstruments/labview:${{ env.LABVIEW_IMAGE }}
 
       - name: Download Approval Tests package
         # Same workflow run as the caller (workflow_call jobs execute inside the caller's run),
@@ -136,124 +98,22 @@ jobs:
           name: ${{ inputs.package_artifact_name }}
           path: downloaded-package
 
-      - name: Install downloaded Approval Tests package
-        if: inputs.package_artifact_name != ''
+      - name: Run LUnit tests (LabVIEW Windows container)
+        shell: pwsh
         run: |
-          source ./scripts/setup_display.sh
-          package=$(ls downloaded-package/*.vip)
-          echo "Installing freshly built package: ${package}"
-          vipm install "${package}" --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 --show-progress
-
-      - name: VIPM List Installed packages
-        run: |
-          source ./scripts/setup_display.sh
-          vipm list --installed || true
-
-      # Debug fix attempt: the resource-dump comparison above showed the Linux-installed
-      # pnr_lib_jsontext_object_serialization VIs (e.g. Generic Object Serializer/LVObject to
-      # JSON.vi) have UNRESOLVED link-info entries for their own owning class and sibling VIs
-      # ("!Generic Object Serializer.lvclass" / bare "Handle Type.vi", no <vilib>-relative path)
-      # where the same files on Windows resolve cleanly. Mass-compiling forces LabVIEW to
-      # re-resolve and re-save those links against the actual on-disk paths, which should fix
-      # dynamic dispatch silently falling back to the parent class's "return null" stub.
-      #
-      # First attempt used `labview -mc <dir>` directly - that opens the interactive
-      # file-selection dialog and just hangs under Xvfb (both invocations timed out at 180s,
-      # confirmed via a follow-up debug run). Switching to LabVIEW CLI's built-in MassCompile
-      # operation instead - it's NI's own headless-first tool (see
-      # /usr/local/natinst/nilvcli/Operations referenced in LabVIEWCLI's own error strings,
-      # which is the Linux install location), unlike the interactive `-mc` flag on labview
-      # itself. Exact flag names aren't confirmed yet, so this step is defensive: it locates
-      # the binary, prints its own --help before doing anything (so the real syntax is in the
-      # log even if the guessed invocation below is wrong), and every command has `|| true` so
-      # one failed guess doesn't block the rest of the job or hide the diagnostics.
-      - name: Mass Compile PNR/JDP Science packages (LabVIEW CLI)
-        run: |
-          source ./scripts/setup_display.sh
-          LV_DIR="/usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64"
-
-          echo "--- Looking for LabVIEWCLI ---"
-          find /usr/local/natinst -maxdepth 4 -iname "*labview*cli*" 2>/dev/null
-          CLI=$(find /usr/local/natinst -iname "LabVIEWCLI" -type f 2>/dev/null | head -1)
-          echo "CLI=${CLI:-<not found>}"
-
-          if [ -z "$CLI" ]; then
-            echo "LabVIEWCLI binary not found - skipping mass compile, leaving Unit Tests to run against whatever is installed."
-            exit 0
-          fi
-
-          echo "--- LabVIEWCLI -OperationName MassCompile -Help ---"
-          # Run 3 tried this without -LabVIEWPath and got Error -350004 ("path to LabVIEW is
-          # unknown") instead of the actual operation help - -Help apparently still needs
-          # -LabVIEWPath to connect first. Fixed below. Also: the underlying VI Server method
-          # (found via lvai_vi_server_reference against the local LabVIEW install) names its
-          # parameter literally "Directory to Compile" - LabVIEWCLI's other flags
-          # (-LabVIEWPath, -LogFilePath, -AdditionalOperationDirectory) are all PascalCase
-          # runs of the words with no spaces, so "-DirectoryToCompile" is now the leading
-          # guess, tried first.
-          "$CLI" -OperationName MassCompile -Help -LabVIEWPath "$LV_DIR/labview" 2>&1 || true
-
-          echo "--- Attempting MassCompile on vi.lib/PNR (guessing likely flag names) ---"
-          for flag in -DirectoryToCompile -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
-            echo "trying $flag ..."
-            timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/PNR" -LabVIEWPath "$LV_DIR/labview" \
-              && { echo "SUCCEEDED with $flag"; break; } \
-              || echo "$flag failed"
-          done
-
-          echo "--- Attempting MassCompile on vi.lib/JDP Science (guessing likely flag names) ---"
-          for flag in -DirectoryToCompile -DirectoryPath -Directory -Path -TargetDirectory -MassCompileDirectory; do
-            echo "trying $flag ..."
-            timeout 60 "$CLI" -OperationName MassCompile "$flag" "$LV_DIR/vi.lib/JDP Science" -LabVIEWPath "$LV_DIR/labview" \
-              && { echo "SUCCEEDED with $flag"; break; } \
-              || echo "$flag failed"
-          done
-
-          pkill -f labview || true
-          sleep 2
-          echo "Starting LabVIEW"
-          "$LV_DIR/labview" --headless &
-          sleep 3
-
-      - name: Unit Tests
-        run: |
-          source ./scripts/setup_display.sh
-          mkdir -p reports
-          rm reports/Lunit.UnitTestReport.xml || true
-          g-cli --kill --kill-timeout 5000  lunit -- -r reports/Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
-
-      # Temporary: dump the compiled resource blocks (via pylavi's lv_assembler) of the installed
-      # JSONtext/pnr class-serialization VIs and our own Person.lvclass, so they can be diffed
-      # byte-for-byte / signature-for-signature against the same files' dumps taken from a Windows
-      # install. Looking specifically for a class version/reference signature (RTSG resource)
-      # mismatch between the Linux and Windows builds of pnr_lib_jsontext_object_serialization /
-      # jdp_science_jsontext, which could explain Verify Person.vi's dynamic dispatch silently
-      # resolving to the base "return null" implementation only on this platform.
-      - name: Debug - dump JSONtext/serializer/Person resource blocks
-        if: success() || failure()
-        run: |
-          source ./scripts/setup_display.sh
-          apt-get update && apt-get install -y python3-pip >/dev/null
-          python3 -m pip install --quiet pylavi
-          mkdir -p resource-dumps
-          {
-            find /usr/local/natinst -ipath "*JSONtext*" \( -iname "*.vi" -o -iname "*.lvclass" \) 2>/dev/null
-            find /usr/local/natinst -ipath "*pnr*" \( -iname "*.vi" -o -iname "*.lvclass" \) 2>/dev/null
-            echo "Common/Person/Person.lvclass"
-          } | sort -u > resource-dumps/file-list.txt
-          while IFS= read -r f; do
-            [ -f "$f" ] || { echo "MISSING: $f"; continue; }
-            outname=$(echo "$f" | tr '/ ' '__')
-            python3 -m pylavi.assembler -d "$f" -o "resource-dumps/${outname}.json" \
-              || echo "FAILED: $f"
-          done < resource-dumps/file-list.txt
-
-      - name: Grab Resource Dumps
-        if: success() || failure()
-        uses: actions/upload-artifact@v6
-        with:
-          name: resource-dumps
-          path: resource-dumps
+          docker run --rm `
+            -v "${{ github.workspace }}:C:\workspace" `
+            -e VIPM_NON_INTERACTIVE `
+            -e VIPM_ASSUME_YES `
+            -e VIPM_DEBUG `
+            nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
+            powershell -File "C:\workspace\scripts\windows\run-lunit-tests.ps1" `
+              -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
+              -LabviewBitness ${{ env.LABVIEW_BITNESS }} `
+              -VipcPath "C:\workspace\Approvals.StarterProject.Lunit.vipc" `
+              -ProjectPath "C:\workspace\Approvals.StarterProject.Lunit.lvproj" `
+              -ReportPath "C:\workspace\reports\Lunit.UnitTestReport.xml" `
+              -PackageDir "C:\workspace\downloaded-package"
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@v6
@@ -261,66 +121,78 @@ jobs:
         with:
           report_paths: 'reports/*UnitTestReport.xml'
           include_passed: true
-          
+
       - name: Grab Artifacts
         if: success() || failure() # always run even if the previous step fails
         uses: actions/upload-artifact@v6
         with:
-          name: lunit-test-reports 
+          name: lunit-test-reports
           path: |
             reports/*UnitTestReport.xml
             **/*.received.*
 
 # Get LUnit running first
   Caraya:
-    if: false 
-    runs-on: ubuntu-latest
-    # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
-    defaults:
-      run:
-        shell: bash
-
-    # The official LabVIEW container image from NI
-    container:
-      image: nationalinstruments/labview:2026q3-linux
-      # --init injects a real init (tini) as PID 1 ahead of the entrypoint so orphaned/killed LabVIEW processes actually get reaped instead of piling up as zombies.
-      options: --init
+    if: false
+    runs-on: windows-latest
 
     env:
-      LABVIEW_IMAGE: 2026q3-linux
-      VIPM_RELEASE_TYPE: preview
-      VIPM_VERSION: 26.3.0-3991
-      VIPM_COMMUNITY_EDITION: true
-      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
-      VIPM_NON_INTERACTIVE: 1    
+      LABVIEW_IMAGE: 2026q3-windows
+      LABVIEW_VERSION_YEAR: 2026
+      LABVIEW_BITNESS: 64
+      VIPM_NON_INTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
 
     steps:
-      - name: Install git
-        run: |
-          apt-get update && apt-get install -y git >/dev/null
       - name: Checkout code
         uses: actions/checkout@v6
         with:
+          # Pinned explicitly: when called via workflow_call from another repo, the default
+          # checkout target is the CALLER's repo/ref, not this one.
+          repository: approvals/ApprovalTests.LabVIEW.StarterProject
+          ref: ${{ inputs.starter_ref || github.ref }}
           submodules: recursive
-      - name: Setup Container
-        run: |
-          ./scripts/setup_container.sh
-      # Use GitHub's caching action to cache VIPM's package cache.
-      - name: Cache VIPM packages
-        id: cache-vipm
-        uses: actions/cache@v5
-        env:
-          # Increment this to invalidate the cache (restore-keys included).
-          CACHE_VERSION: 2
+
+      - name: Pull LabVIEW container image
+        run: docker pull nationalinstruments/labview:${{ env.LABVIEW_IMAGE }}
+
+      - name: Download Approval Tests package
+        if: inputs.package_artifact_name != ''
+        uses: actions/download-artifact@v8
         with:
+          name: ${{ inputs.package_artifact_name }}
+          path: downloaded-package
+
+      - name: Run Caraya tests (LabVIEW Windows container)
+        shell: pwsh
+        run: |
+          docker run --rm `
+            -v "${{ github.workspace }}:C:\workspace" `
+            -e VIPM_NON_INTERACTIVE `
+            -e VIPM_ASSUME_YES `
+            -e VIPM_DEBUG `
+            nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
+            powershell -File "C:\workspace\scripts\windows\run-caraya-tests.ps1" `
+              -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
+              -LabviewBitness ${{ env.LABVIEW_BITNESS }} `
+              -VipcPath "C:\workspace\Approvals.StarterProject.Caraya.vipc" `
+              -TestPath "C:\workspace\Caraya.Tests" `
+              -ReportPath "C:\workspace\reports\Caraya.UnitTestReport.xml" `
+              -PackageDir "C:\workspace\downloaded-package"
+
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # always run even if the previous step fails
+        with:
+          report_paths: 'reports/*UnitTestReport.xml'
+          include_passed: true
+
+      - name: Grab Artifacts
+        if: success() || failure() # always run even if the previous step fails
+        uses: actions/upload-artifact@v6
+        with:
+          name: caraya-test-reports
           path: |
-            /usr/local/natinst/LabVIEW*/
-            /usr/local/jki/vipm/cache/
-            /usr/local/jki/vipm/db/
-          # Key includes hashes of the project package manifests (.vipc and .dragon files)
-          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('approvals-dev.vipc', 'error.dragon') }}
-          restore-keys: |
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
+            reports/*UnitTestReport.xml
+            **/*.received.*
