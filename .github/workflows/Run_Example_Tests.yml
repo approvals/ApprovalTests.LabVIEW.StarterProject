@@ -65,7 +65,11 @@ jobs:
   # (VIPM_COMMUNITY_EDITION - avoids needing `vipm activate` with a Pro serial), and the container
   # is given the *host runner's* git.exe via a bind mount (see the -v ...Git... below) because
   # VIPM Community Edition shells out to git to check a package repository's visibility and the
-  # image has no git of its own. No Xvfb/display setup is needed here (Windows-only concern).
+  # image has no git of its own. That check also needs to run from *inside* a git repo - the Linux
+  # job never hits this because a `container:` job's default cwd is already the checked-out
+  # workspace, but a plain `docker run` defaults to something else, so `-w C:\workspace` sets it
+  # explicitly (the same reason vipm calls in the .ps1 scripts don't need their own `cd`).
+  # No Xvfb/display setup is needed here (Windows-only concern).
   LUnit:
     needs: PylaviChecks
     runs-on: windows-latest
@@ -109,6 +113,7 @@ jobs:
         shell: pwsh
         run: |
           docker run --rm `
+            -w "C:\workspace" `
             -v "${{ github.workspace }}:C:\workspace" `
             -v "C:\Program Files\Git:C:\Git" `
             -e VIPM_NONINTERACTIVE `
@@ -183,6 +188,7 @@ jobs:
         shell: pwsh
         run: |
           docker run --rm `
+            -w "C:\workspace" `
             -v "${{ github.workspace }}:C:\workspace" `
             -v "C:\Program Files\Git:C:\Git" `
             -e VIPM_NONINTERACTIVE `
