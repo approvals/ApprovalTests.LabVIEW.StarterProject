@@ -11,6 +11,14 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# VIPM Community Edition shells out to git to check a package repository's visibility, and this
+# image has no git of its own - the workflow bind-mounts the host runner's own Git for Windows
+# install (C:\Program Files\Git on GitHub-hosted windows-latest) into the container at C:\Git, so
+# just put it on PATH here instead of downloading/installing another copy of git.
+if (Test-Path "C:\Git\cmd\git.exe") {
+    $env:PATH = "C:\Git\cmd;$env:PATH"
+}
+
 # Confirmed on 2026-09-04 CI run: the "NI Package Manager CLI" preinstalled in this image is
 # nipkg.exe (NI's own .nipkg-feed package manager) - NOT the classic VIPM CLI (vipm.exe) that
 # understands the .vip/.vipc files this project's whole dependency stack (LUnit, Caraya, g-cli,

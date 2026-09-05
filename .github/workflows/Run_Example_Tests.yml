@@ -56,15 +56,16 @@ jobs:
   # cicd-examples (see masscompile-windows-container.yml / run-vi-analyzer-windows-container.yml
   # in https://github.com/ni/labview-for-containers).
   #
-  # Per https://github.com/ni/labview-for-containers/blob/main/docs/windows-prebuilt.md, this image
-  # ships LabVIEW, LabVIEWCLI, and NI Package Manager/VIPM CLI preinstalled - unlike the Linux
-  # image there is no apt-get/curl'd .deb install step, and no Xvfb/display setup, needed.
-  #
-  # NOTE: several specifics below (vipm.exe's exact path/flags on Windows, where VIPM installs
-  # g-cli.exe, whether PATH already includes them) are carried over from the Linux job's syntax
-  # but have not been run against a real Windows container - scripts/windows/run-lunit-tests.ps1
-  # does its own tool discovery and prints what it finds, so a first real CI run will surface any
-  # wrong assumption quickly rather than silently.
+  # Per https://github.com/ni/labview-for-containers/blob/main/docs/windows-prebuilt.md and its
+  # own Dockerfile-windows, this image ships LabVIEW, LabVIEWCLI, and NI Package Manager (nipkg,
+  # NI's own .nipkg-feed tool) preinstalled - but NOT the classic VIPM CLI (vipm.exe) that
+  # understands the .vip/.vipc files this project's whole dependency stack (LUnit, Caraya, g-cli,
+  # JSONtext, ApprovalTests itself) is distributed as. So run-lunit-tests.ps1 installs VIPM CLI
+  # itself first (same idea as the Linux job's curl'd .deb), runs it in Community Edition mode
+  # (VIPM_COMMUNITY_EDITION - avoids needing `vipm activate` with a Pro serial), and the container
+  # is given the *host runner's* git.exe via a bind mount (see the -v ...Git... below) because
+  # VIPM Community Edition shells out to git to check a package repository's visibility and the
+  # image has no git of its own. No Xvfb/display setup is needed here (Windows-only concern).
   LUnit:
     needs: PylaviChecks
     runs-on: windows-latest
@@ -109,6 +110,7 @@ jobs:
         run: |
           docker run --rm `
             -v "${{ github.workspace }}:C:\workspace" `
+            -v "C:\Program Files\Git:C:\Git" `
             -e VIPM_NONINTERACTIVE `
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
@@ -182,6 +184,7 @@ jobs:
         run: |
           docker run --rm `
             -v "${{ github.workspace }}:C:\workspace" `
+            -v "C:\Program Files\Git:C:\Git" `
             -e VIPM_NONINTERACTIVE `
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
