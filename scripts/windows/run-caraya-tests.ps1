@@ -80,18 +80,22 @@ $vipm = Find-Tool -Name "vipm.exe"
 # `vipm refresh` does need that path (and is what the docs say to run before every install anyway,
 # to avoid stale caches), so use it as the real readiness probe.
 Write-Host "=== Waiting for VIPM CLI to become ready (vipm refresh) ==="
+# IMPORTANT: don't merge stderr via `2>&1` here - with $ErrorActionPreference = "Stop", that wraps
+# every stderr line (even routine progress text like "Updating package cache...") into a
+# terminating ErrorRecord regardless of the process's actual exit code. Seen directly in CI
+# (against the LUnit job, same image): this loop reported failure on a refresh that had in fact
+# succeeded. Let stderr print straight to the log and judge success only by $LASTEXITCODE.
 $ready = $false
-$lastOutput = $null
 for ($i = 1; $i -le 15; $i++) {
-    $lastOutput = & $vipm refresh 2>&1
+    & $vipm refresh
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
-    Write-Host "vipm refresh not ready yet (attempt $i/15, exit $LASTEXITCODE): $lastOutput"
+    Write-Host "vipm refresh not ready yet (attempt $i/15, exit $LASTEXITCODE)"
     Start-Sleep -Seconds 2
 }
 if (-not $ready) {
     Write-Host "=== Diagnostics: C:\ProgramData\JKI contents ==="
     Get-ChildItem -Path "C:\ProgramData\JKI" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-    throw "vipm refresh never succeeded after installing (still failing after 15 attempts): $lastOutput"
+    throw "vipm refresh never succeeded after installing (still failing after 15 attempts)"
 }
 Write-Host "vipm is ready"
 
