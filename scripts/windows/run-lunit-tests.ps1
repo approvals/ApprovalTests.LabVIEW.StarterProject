@@ -65,32 +65,26 @@ function Find-Tool {
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
 
-# `vipm --version` is NOT a valid readiness check - confirmed in CI: it returned successfully
-# ("vipm 26.3.1") on the same run where the very next `vipm install` still failed with "Failed to
-# load Settings.ini". Per https://docs.vipm.io/preview/cli/docker/, real commands like install
-# talk to a background "VIPM Desktop" process (see the VIPM_DESKTOP_LIVELINESS_TIMEOUT env var);
-# --version apparently doesn't need it, so it can't tell us whether Desktop/Settings.ini are
-# actually ready. `vipm refresh` does need that path (and is what the docs say to run before every
-# install anyway, to avoid stale caches), so use it as the real readiness probe.
-Write-Host "=== Waiting for VIPM CLI to become ready (vipm refresh) ==="
-# IMPORTANT: don't merge stderr via `2>&1` here - with $ErrorActionPreference = "Stop", that wraps
-# every stderr line (even routine progress text like "Updating package cache...") into a
-# terminating ErrorRecord regardless of the process's actual exit code. Seen directly in CI: this
-# loop reported failure on a refresh that had in fact succeeded. Let stderr print straight to the
-# log and judge success only by $LASTEXITCODE.
-$ready = $false
-for ($i = 1; $i -le 15; $i++) {
-    & $vipm refresh
-    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
-    Write-Host "vipm refresh not ready yet (attempt $i/15, exit $LASTEXITCODE)"
-    Start-Sleep -Seconds 2
+# Root cause, found by inspecting the Linux .deb this same project's Linux job installs: its
+# postinst script explicitly creates an EMPTY Settings.ini (`install -m 664 /dev/null
+# ".../Settings.ini"`) if one doesn't already exist - that's VIPM CLI's entire "first run"
+# bootstrap on Linux. The Windows installer has no equivalent step, so on a truly fresh install
+# `vipm install` fails with "Failed to load Settings.ini: ... cannot find the file specified."
+# (vipm refresh degrades this to a warning and limps on, which is what made it look like a timing
+# race in earlier debugging - it never was one). Fix: create the same empty placeholder ourselves.
+$vipmSettingsDir = "C:\ProgramData\JKI\VIPM"
+$vipmSettingsFile = Join-Path $vipmSettingsDir "Settings.ini"
+if (-not (Test-Path $vipmSettingsFile)) {
+    New-Item -ItemType Directory -Force -Path $vipmSettingsDir | Out-Null
+    New-Item -ItemType File -Force -Path $vipmSettingsFile | Out-Null
+    Write-Host "Created empty $vipmSettingsFile (mirrors the Linux .deb postinst's bootstrap)"
 }
-if (-not $ready) {
-    Write-Host "=== Diagnostics: C:\ProgramData\JKI contents ==="
-    Get-ChildItem -Path "C:\ProgramData\JKI" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
-    throw "vipm refresh never succeeded after installing (still failing after 15 attempts)"
-}
-Write-Host "vipm is ready"
+
+# Recommended by https://docs.vipm.io/preview/cli/docker/ before every install, to avoid stale
+# caches. Not fatal if it warns (see comment above) - the real gate is Settings.ini existing.
+Write-Host "=== vipm refresh ==="
+& $vipm refresh
+if ($LASTEXITCODE -ne 0) { Write-Host "vipm refresh failed with exit $LASTEXITCODE (non-fatal)" }
 
 function Invoke-Vipm {
     param([string[]]$VipmArgs)
