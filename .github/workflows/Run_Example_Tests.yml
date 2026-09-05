@@ -156,6 +156,19 @@ jobs:
             reports/*UnitTestReport.xml
             **/*.received.*
 
+      # Screenshots (via PrintWindow, works even with no interactive desktop) and a process list,
+      # taken every 15s while the diagnostic single-package install runs inside
+      # run-lunit-tests.ps1 - added to see what's actually on screen when `vipm install` hangs
+      # applying packages, since prior CI runs show a real hang (not just slow progress) with no
+      # further clue at the console-log level.
+      - name: Grab Diagnostics
+        if: success() || failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lunit-diagnostics
+          path: diagnostics/
+          if-no-files-found: ignore
+
 # Get LUnit running first
   Caraya:
     if: false

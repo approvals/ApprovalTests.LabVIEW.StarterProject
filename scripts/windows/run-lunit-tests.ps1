@@ -119,6 +119,76 @@ function Set-LabviewDialogSuppression {
     Write-Host "Updated $iniPath with dialog-suppression keys"
 }
 
+# Captures every visible top-level window (title + a PrintWindow screenshot) plus a process list,
+# so that if `vipm install` hangs again we can actually see what's on screen instead of guessing -
+# a Windows container has no interactive desktop, but PrintWindow with PW_RENDERFULLCONTENT can
+# still capture a GUI app's window content even so (verified locally against a real window before
+# relying on it here). Screenshots land under $DiagDir, which the workflow uploads as an artifact.
+Add-Type -AssemblyName System.Drawing
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public class Win32Diag {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
+    [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hwnd, IntPtr hdcBlt, uint nFlags);
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+"@
+function Save-WindowScreenshots {
+    param([string]$OutDir, [string]$Tag)
+    New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+    $windows = New-Object System.Collections.Generic.List[object]
+    $callback = {
+        param($hWnd, $lParam)
+        if ([Win32Diag]::IsWindowVisible($hWnd)) {
+            $len = [Win32Diag]::GetWindowTextLength($hWnd)
+            if ($len -gt 0) {
+                $sb = New-Object System.Text.StringBuilder ($len + 1)
+                [Win32Diag]::GetWindowText($hWnd, $sb, $sb.Capacity) | Out-Null
+                $procId = 0
+                [Win32Diag]::GetWindowThreadProcessId($hWnd, [ref]$procId) | Out-Null
+                $windows.Add([PSCustomObject]@{ Handle = $hWnd; Title = $sb.ToString(); ProcessId = $procId })
+            }
+        }
+        return $true
+    }
+    [Win32Diag]::EnumWindows($callback, [IntPtr]::Zero) | Out-Null
+    Write-Host "[$Tag] Found $($windows.Count) visible titled window(s)"
+    foreach ($w in $windows) {
+        $procName = (Get-Process -Id $w.ProcessId -ErrorAction SilentlyContinue).ProcessName
+        Write-Host "[$Tag] Window: '$($w.Title)' (process: $procName, pid $($w.ProcessId))"
+        try {
+            $rect = New-Object Win32Diag+RECT
+            [Win32Diag]::GetWindowRect($w.Handle, [ref]$rect) | Out-Null
+            $width = $rect.Right - $rect.Left
+            $height = $rect.Bottom - $rect.Top
+            if ($width -le 0 -or $height -le 0) { continue }
+            $bmp = New-Object System.Drawing.Bitmap $width, $height
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $hdc = $g.GetHdc()
+            [Win32Diag]::PrintWindow($w.Handle, $hdc, 2) | Out-Null
+            $g.ReleaseHdc($hdc)
+            $safeTitle = ($w.Title -replace '[^\w\-]', '_')
+            if ($safeTitle.Length -gt 40) { $safeTitle = $safeTitle.Substring(0, 40) }
+            $path = Join-Path $OutDir "$Tag--$procName-$($w.ProcessId)--$safeTitle.png"
+            $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+            $g.Dispose(); $bmp.Dispose()
+        } catch {
+            Write-Host "[$Tag] Failed to capture '$($w.Title)': $_"
+        }
+    }
+    Get-Process | Select-Object Id, ProcessName, CPU, WorkingSet, StartTime | Sort-Object ProcessName |
+        Format-Table -AutoSize | Out-String -Width 200 | Out-File (Join-Path $OutDir "$Tag--processes.txt")
+}
+$DiagDir = "C:\workspace\diagnostics"
+
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
 Set-LabviewDialogSuppression -LabviewYear $LabviewYear
@@ -154,17 +224,29 @@ function Invoke-Vipm {
 }
 
 # DIAGNOSTIC, not (yet) load-bearing: twice now, applying our own 9-package .vipc has produced
-# zero output after "[VIPM] 105.9%" until the liveliness timeout kills it - indistinguishable, at
-# this verbosity, between "genuinely deadlocked" and "cold-compiling 9 packages with no progress
-# reporting for that phase." Installing one tiny, well-known package (the exact one NI's own docs
-# use as an example) with a short timeout answers that cheaply: if THIS also hangs, the problem is
-# VIPM Desktop/LabVIEW communication itself, not our package set. Non-fatal either way - the real
-# install below still runs regardless of this result.
+# zero output after "[VIPM] 105.9%" until the liveliness timeout kills it - a prior CI run showed
+# this same single-package install ALSO hangs identically, ruling out "our package set is just
+# slow to compile." This time, run it as a background process and screenshot every visible window
+# every 15s while it runs, to actually see whether LabVIEW is stuck behind a dialog or something
+# else entirely.
 Write-Host "=== Diagnostic: installing a single small package (oglib_boolean) with a short timeout ==="
 $prevTimeout = $env:VIPM_DESKTOP_LIVELINESS_TIMEOUT
 $env:VIPM_DESKTOP_LIVELINESS_TIMEOUT = "90"
-& $vipm install oglib_boolean --labview-version $LabviewYear --labview-bitness $LabviewBitness -y
-$smokeTestExit = $LASTEXITCODE
+$smokeArgs = @("install", "oglib_boolean", "--labview-version", $LabviewYear, "--labview-bitness", $LabviewBitness, "-y")
+Write-Host "vipm $($smokeArgs -join ' ')"
+$smokeProc = Start-Process -FilePath $vipm -ArgumentList $smokeArgs -PassThru -NoNewWindow
+$waited = 0
+Save-WindowScreenshots -OutDir $DiagDir -Tag "smoketest-0s"
+while (-not $smokeProc.HasExited -and $waited -lt 150) {
+    Start-Sleep -Seconds 15
+    $waited += 15
+    Save-WindowScreenshots -OutDir $DiagDir -Tag "smoketest-${waited}s"
+}
+if (-not $smokeProc.HasExited) {
+    Write-Host "Still running after ${waited}s - waiting for it to exit on its own"
+    $smokeProc.WaitForExit()
+}
+$smokeTestExit = $smokeProc.ExitCode
 $env:VIPM_DESKTOP_LIVELINESS_TIMEOUT = $prevTimeout
 if ($smokeTestExit -eq 0) {
     Write-Host "Diagnostic install SUCCEEDED - VIPM Desktop/LabVIEW communication works for a trivial package"
