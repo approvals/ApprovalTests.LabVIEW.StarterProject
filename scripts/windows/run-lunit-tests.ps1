@@ -153,6 +153,25 @@ function Invoke-Vipm {
     }
 }
 
+# DIAGNOSTIC, not (yet) load-bearing: twice now, applying our own 9-package .vipc has produced
+# zero output after "[VIPM] 105.9%" until the liveliness timeout kills it - indistinguishable, at
+# this verbosity, between "genuinely deadlocked" and "cold-compiling 9 packages with no progress
+# reporting for that phase." Installing one tiny, well-known package (the exact one NI's own docs
+# use as an example) with a short timeout answers that cheaply: if THIS also hangs, the problem is
+# VIPM Desktop/LabVIEW communication itself, not our package set. Non-fatal either way - the real
+# install below still runs regardless of this result.
+Write-Host "=== Diagnostic: installing a single small package (oglib_boolean) with a short timeout ==="
+$prevTimeout = $env:VIPM_DESKTOP_LIVELINESS_TIMEOUT
+$env:VIPM_DESKTOP_LIVELINESS_TIMEOUT = "90"
+& $vipm install oglib_boolean --labview-version $LabviewYear --labview-bitness $LabviewBitness -y
+$smokeTestExit = $LASTEXITCODE
+$env:VIPM_DESKTOP_LIVELINESS_TIMEOUT = $prevTimeout
+if ($smokeTestExit -eq 0) {
+    Write-Host "Diagnostic install SUCCEEDED - VIPM Desktop/LabVIEW communication works for a trivial package"
+} else {
+    Write-Host "Diagnostic install FAILED/HUNG (exit $smokeTestExit) - problem is not specific to our .vipc's package set"
+}
+
 Write-Host "=== Installing packages from $VipcPath ==="
 Invoke-Vipm @("install", $VipcPath, "--labview-version", $LabviewYear, "--labview-bitness", $LabviewBitness, "--show-progress")
 

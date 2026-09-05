@@ -80,12 +80,17 @@ jobs:
       LABVIEW_BITNESS: 64
       VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
-      VIPM_DEBUG: 0
-      # Default is 60s. A cold container's first-ever LabVIEW package install/compile can go
-      # quiet for longer than that between progress updates - confirmed in CI: install got to
-      # "[VIPM] 105.9%" and then hit exactly this timeout ("made no progress for 60s"). The Linux
-      # job already sets this to 600 for the same reason; carrying it over here.
-      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
+      # Was 0. Bumped to get real diagnostics: raising the liveliness timeout below from 60s to
+      # 600s did NOT help - install hit the exact same "105.9%" wall and produced zero output for
+      # the full 600s regardless, and pre-seeding LabVIEW.ini with dialog-suppression keys (the
+      # next theory tried) didn't change that either. Both "genuinely hung" and "slow phase with
+      # no progress reporting" would look identical from the outside at this verbosity, so turn on
+      # vipm's own debug logging to actually see what it's doing during the silence.
+      VIPM_DEBUG: 1
+      # Bumped well past the 600s that already proved insufficient, to find out whether this ever
+      # completes given enough time (cold LabVIEW compile of 9 packages, first run ever) or is a
+      # true deadlock that no amount of waiting fixes.
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 1800
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
@@ -162,12 +167,17 @@ jobs:
       LABVIEW_BITNESS: 64
       VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
-      VIPM_DEBUG: 0
-      # Default is 60s. A cold container's first-ever LabVIEW package install/compile can go
-      # quiet for longer than that between progress updates - confirmed in CI: install got to
-      # "[VIPM] 105.9%" and then hit exactly this timeout ("made no progress for 60s"). The Linux
-      # job already sets this to 600 for the same reason; carrying it over here.
-      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
+      # Was 0. Bumped to get real diagnostics: raising the liveliness timeout below from 60s to
+      # 600s did NOT help - install hit the exact same "105.9%" wall and produced zero output for
+      # the full 600s regardless, and pre-seeding LabVIEW.ini with dialog-suppression keys (the
+      # next theory tried) didn't change that either. Both "genuinely hung" and "slow phase with
+      # no progress reporting" would look identical from the outside at this verbosity, so turn on
+      # vipm's own debug logging to actually see what it's doing during the silence.
+      VIPM_DEBUG: 1
+      # Bumped well past the 600s that already proved insufficient, to find out whether this ever
+      # completes given enough time (cold LabVIEW compile of 9 packages, first run ever) or is a
+      # true deadlock that no amount of waiting fixes.
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 1800
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
