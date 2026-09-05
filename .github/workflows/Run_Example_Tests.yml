@@ -81,6 +81,11 @@ jobs:
       VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
+      # Default is 60s. A cold container's first-ever LabVIEW package install/compile can go
+      # quiet for longer than that between progress updates - confirmed in CI: install got to
+      # "[VIPM] 105.9%" and then hit exactly this timeout ("made no progress for 60s"). The Linux
+      # job already sets this to 600 for the same reason; carrying it over here.
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
@@ -120,6 +125,7 @@ jobs:
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
             -e VIPM_COMMUNITY_EDITION `
+            -e VIPM_DESKTOP_LIVELINESS_TIMEOUT `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-lunit-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
@@ -157,6 +163,11 @@ jobs:
       VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
+      # Default is 60s. A cold container's first-ever LabVIEW package install/compile can go
+      # quiet for longer than that between progress updates - confirmed in CI: install got to
+      # "[VIPM] 105.9%" and then hit exactly this timeout ("made no progress for 60s"). The Linux
+      # job already sets this to 600 for the same reason; carrying it over here.
+      VIPM_DESKTOP_LIVELINESS_TIMEOUT: 600
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
@@ -195,6 +206,7 @@ jobs:
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
             -e VIPM_COMMUNITY_EDITION `
+            -e VIPM_DESKTOP_LIVELINESS_TIMEOUT `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-caraya-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
