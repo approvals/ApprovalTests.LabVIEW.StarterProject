@@ -68,8 +68,66 @@ function Find-Tool {
     throw "Could not locate $Name on PATH or under: $($roots -join ', ')"
 }
 
+# UNVERIFIED GUESS, not yet confirmed from a log line: against the LUnit job (same image),
+# `vipm install` reached "[VIPM] 105.9%" and then produced literally zero further output for the
+# full 600s liveliness timeout - a genuine hang, not slow progress. VIPM Desktop launches LabVIEW
+# itself to actually apply packages; the leading theory, by analogy with the Linux job's
+# setup_container.sh (which writes labview.conf keys like autoerr=3 for exactly this reason - see
+# https://forums.ni.com/t5/Continuous-Integration/Preemptively-disable-internal-error-dialog/td-p/4407330),
+# is that LabVIEW hit an internal dialog with no one to click it in a headless container. This
+# pre-seeds the Windows equivalent (LabVIEW.ini) with the same keys before anything launches
+# LabVIEW. If the hang recurs anyway, this theory was wrong and the ini edit did nothing harmful.
+function Set-LabviewDialogSuppression {
+    param([int]$LabviewYear)
+    $labviewDir = "${env:ProgramFiles}\National Instruments\LabVIEW $LabviewYear"
+    if (-not (Test-Path $labviewDir)) {
+        Write-Host "LabVIEW install dir not found at '$labviewDir' - skipping dialog suppression"
+        return
+    }
+    $iniPath = Join-Path $labviewDir "LabVIEW.ini"
+    $keys = [ordered]@{
+        "autoerr"                      = "3"
+        "NIERShowFatalDialog"          = "False"
+        "NIERFatalAutoSend"            = "True"
+        "NIERNonFatalAutoSend"         = "True"
+        "NIERShowNonFatalDialogOnExit" = "False"
+        "NIERSendDialogClose"          = "True"
+        "DWarnDialog"                  = "False"
+        "promoteDWarnInternals"        = "False"
+    }
+    $lines = [System.Collections.Generic.List[string]]::new()
+    if (Test-Path $iniPath) { (Get-Content -Path $iniPath) | ForEach-Object { $lines.Add($_) } }
+    $sectionIndex = ($lines | Select-String -Pattern '^\s*\[LabVIEW\]\s*$' -SimpleMatch:$false).LineNumber
+    if (-not $sectionIndex) {
+        $lines.Add("[LabVIEW]")
+        $sectionIndex = $lines.Count
+    }
+    $sectionStart = $sectionIndex - 1
+    $sectionEnd = $lines.Count
+    for ($i = $sectionStart + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i].Trim().StartsWith("[")) { $sectionEnd = $i; break }
+    }
+    foreach ($key in $keys.Keys) {
+        $found = $false
+        for ($i = $sectionStart + 1; $i -lt $sectionEnd; $i++) {
+            if ($lines[$i] -match "^\s*$key\s*=") {
+                $lines[$i] = "$key=$($keys[$key])"
+                $found = $true
+                break
+            }
+        }
+        if (-not $found) {
+            $lines.Insert($sectionEnd, "$key=$($keys[$key])")
+            $sectionEnd++
+        }
+    }
+    Set-Content -Path $iniPath -Value $lines
+    Write-Host "Updated $iniPath with dialog-suppression keys"
+}
+
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
+Set-LabviewDialogSuppression -LabviewYear $LabviewYear
 
 # Root cause, found by inspecting the Linux .deb this same project's Linux job installs: its
 # postinst script explicitly creates an EMPTY Settings.ini (`install -m 664 /dev/null
