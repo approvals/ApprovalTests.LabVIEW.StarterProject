@@ -73,9 +73,15 @@ jobs:
       LABVIEW_IMAGE: 2026q3-windows
       LABVIEW_VERSION_YEAR: 2026
       LABVIEW_BITNESS: 64
-      VIPM_NON_INTERACTIVE: 1
+      VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
+      # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
+      # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
+      # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
+      # a genuinely fresh VIPM CLI install has no default settings file until activation/edition
+      # is resolved one way or the other. See https://docs.vipm.io/preview/cli/environment-variables/
+      VIPM_COMMUNITY_EDITION: 1
 
     steps:
       - name: Checkout code
@@ -103,9 +109,10 @@ jobs:
         run: |
           docker run --rm `
             -v "${{ github.workspace }}:C:\workspace" `
-            -e VIPM_NON_INTERACTIVE `
+            -e VIPM_NONINTERACTIVE `
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
+            -e VIPM_COMMUNITY_EDITION `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-lunit-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
@@ -140,9 +147,15 @@ jobs:
       LABVIEW_IMAGE: 2026q3-windows
       LABVIEW_VERSION_YEAR: 2026
       LABVIEW_BITNESS: 64
-      VIPM_NON_INTERACTIVE: 1
+      VIPM_NONINTERACTIVE: 1
       VIPM_ASSUME_YES: 1
       VIPM_DEBUG: 0
+      # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
+      # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
+      # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
+      # a genuinely fresh VIPM CLI install has no default settings file until activation/edition
+      # is resolved one way or the other. See https://docs.vipm.io/preview/cli/environment-variables/
+      VIPM_COMMUNITY_EDITION: 1
 
     steps:
       - name: Checkout code
@@ -169,9 +182,10 @@ jobs:
         run: |
           docker run --rm `
             -v "${{ github.workspace }}:C:\workspace" `
-            -e VIPM_NON_INTERACTIVE `
+            -e VIPM_NONINTERACTIVE `
             -e VIPM_ASSUME_YES `
             -e VIPM_DEBUG `
+            -e VIPM_COMMUNITY_EDITION `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-caraya-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
