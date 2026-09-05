@@ -71,6 +71,24 @@ function Find-Tool {
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
 
+# The installer's own process can exit (satisfying Start-Process -Wait) before VIPM has finished
+# writing its default Settings.ini in the background - seen directly in CI (against the LUnit job,
+# same image): the very same install sequence loaded Settings.ini fine on one run and failed with
+# "file not found" on another. Poll with a harmless command instead of assuming ready-to-use the
+# instant the installer returns.
+Write-Host "=== Waiting for VIPM CLI to become ready ==="
+$ready = $false
+for ($i = 1; $i -le 15; $i++) {
+    & $vipm --version 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+    Write-Host "vipm not ready yet (attempt $i/15, exit $LASTEXITCODE) - waiting 2s"
+    Start-Sleep -Seconds 2
+}
+if (-not $ready) {
+    throw "vipm.exe never became ready after installing (still failing after 15 attempts)"
+}
+Write-Host "vipm is ready: $(& $vipm --version)"
+
 function Invoke-Vipm {
     param([string[]]$VipmArgs)
     Write-Host "vipm $($VipmArgs -join ' ')"
