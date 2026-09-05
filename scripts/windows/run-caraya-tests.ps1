@@ -71,23 +71,29 @@ function Find-Tool {
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
 
-# The installer's own process can exit (satisfying Start-Process -Wait) before VIPM has finished
-# writing its default Settings.ini in the background - seen directly in CI (against the LUnit job,
-# same image): the very same install sequence loaded Settings.ini fine on one run and failed with
-# "file not found" on another. Poll with a harmless command instead of assuming ready-to-use the
-# instant the installer returns.
-Write-Host "=== Waiting for VIPM CLI to become ready ==="
+# `vipm --version` is NOT a valid readiness check - confirmed in CI (against the LUnit job, same
+# image): it returned successfully ("vipm 26.3.1") on the same run where the very next
+# `vipm install` still failed with "Failed to load Settings.ini". Per
+# https://docs.vipm.io/preview/cli/docker/, real commands like install talk to a background
+# "VIPM Desktop" process (see the VIPM_DESKTOP_LIVELINESS_TIMEOUT env var); --version apparently
+# doesn't need it, so it can't tell us whether Desktop/Settings.ini are actually ready.
+# `vipm refresh` does need that path (and is what the docs say to run before every install anyway,
+# to avoid stale caches), so use it as the real readiness probe.
+Write-Host "=== Waiting for VIPM CLI to become ready (vipm refresh) ==="
 $ready = $false
+$lastOutput = $null
 for ($i = 1; $i -le 15; $i++) {
-    & $vipm --version 2>&1 | Out-Null
+    $lastOutput = & $vipm refresh 2>&1
     if ($LASTEXITCODE -eq 0) { $ready = $true; break }
-    Write-Host "vipm not ready yet (attempt $i/15, exit $LASTEXITCODE) - waiting 2s"
+    Write-Host "vipm refresh not ready yet (attempt $i/15, exit $LASTEXITCODE): $lastOutput"
     Start-Sleep -Seconds 2
 }
 if (-not $ready) {
-    throw "vipm.exe never became ready after installing (still failing after 15 attempts)"
+    Write-Host "=== Diagnostics: C:\ProgramData\JKI contents ==="
+    Get-ChildItem -Path "C:\ProgramData\JKI" -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+    throw "vipm refresh never succeeded after installing (still failing after 15 attempts): $lastOutput"
 }
-Write-Host "vipm is ready: $(& $vipm --version)"
+Write-Host "vipm is ready"
 
 function Invoke-Vipm {
     param([string[]]$VipmArgs)
