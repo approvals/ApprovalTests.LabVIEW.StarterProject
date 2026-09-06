@@ -422,10 +422,28 @@ if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force }
 # back, and g-cli times out waiting for a connection that was never coming. Same class of problem
 # Caraya already had (see below) and the same fix: search for the actual VI and hand g-cli its real
 # path directly instead of trusting alias resolution.
+#
+# The naive first attempt (take the first file named exactly "lunit.vi") grabbed a decoy:
+# "...\LabVIEW 2026\help\Astemes\LUnit.vi" - almost certainly an About/help VI, not the g-cli
+# execution engine (unlike Caraya's distinctly-named CarayaCLIExecutionEngine.vi, nothing here
+# guarantees the real target is even named exactly "lunit.vi"). So: log the "G CLI Tools" folder's
+# own contents (that's where g-cli itself went looking) and every "*lunit*.vi" match with its full
+# path, for a real answer if this guess is wrong too, then prefer a match that isn't under \help\.
 $niRoot = "${env:ProgramFiles}\National Instruments"
+$gcliToolsDir = Get-ChildItem -Path $niRoot -Directory -Filter "G CLI Tools" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($gcliToolsDir) {
+    Write-Host "=== Contents of $($gcliToolsDir.FullName) ==="
+    Get-ChildItem -Path $gcliToolsDir.FullName -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+} else {
+    Write-Host "No 'G CLI Tools' folder found under $niRoot"
+}
+$allLunitVis = @(Get-ChildItem -Path $niRoot -Filter "*lunit*.vi" -Recurse -File -ErrorAction SilentlyContinue)
+Write-Host "=== All *lunit*.vi matches under $niRoot ==="
+$allLunitVis | ForEach-Object { Write-Host $_.FullName }
 $lunitVi = $null
 if (Test-Path $niRoot) {
-    $match = Get-ChildItem -Path $niRoot -Filter "lunit.vi" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    $match = $allLunitVis | Where-Object { $_.FullName -notmatch '\\help\\' } | Select-Object -First 1
+    if (-not $match) { $match = $allLunitVis | Select-Object -First 1 }
     if ($match) { $lunitVi = $match.FullName }
 }
 if (-not $lunitVi) {
