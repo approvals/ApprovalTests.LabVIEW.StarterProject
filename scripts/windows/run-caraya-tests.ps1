@@ -320,6 +320,19 @@ if ($LASTEXITCODE -ne 0) { Write-Host "vipm list --installed failed (non-fatal)"
 # can't be located any earlier than this.
 $gcli = Find-Tool -Name "g-cli.exe"
 
+# g-cli launches and manages its OWN LabVIEW instance for the VI it runs, and per
+# https://github.com/G-CLI/G-CLI/issues/196 (an almost exact match for this situation - two g-cli
+# style invocations in one session, one against Caraya and one against LUnit, on the NI LabVIEW
+# container image), a LabVIEW process left running from earlier breaks the connection handshake
+# for the next one. `--kill` on the g-cli call below is not a reliable substitute: it most likely
+# only tracks/kills processes g-cli itself launched, not the instance Start-VipmStack started by
+# calling LabVIEW.exe directly - so that instance (needed only for the VIPM install phase, which
+# is done now) has to be stopped ourselves before g-cli gets a clean slate to work with.
+Write-Host "=== Stopping LabVIEW/VIPM Desktop before handing off to g-cli ==="
+Get-Process -Name "LabVIEW" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Get-Process -Name "VI Package Manager" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 3
+
 # Locate the Caraya CLI extension VI by searching rather than guessing the LabVIEW install path
 # (the equivalent guess for vipm.exe/g-cli.exe above was wrong on the first real CI run).
 $niRoot = "${env:ProgramFiles}\National Instruments"
