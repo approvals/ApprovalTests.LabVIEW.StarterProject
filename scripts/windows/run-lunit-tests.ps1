@@ -415,41 +415,35 @@ $reportDir = Split-Path -Parent $ReportPath
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force }
 
-# The bare "lunit" alias doesn't resolve correctly: --verbose (added while chasing the previous
-# hang) showed g-cli falling back to "Checking in vi.lib/G CLI Tools instead" and launching LabVIEW
-# pointed at "...\vi.lib\G CLI Tools\lunit.vi" - a path the sas_workshops_lib_lunit_for_g_cli
-# package's Windows install apparently doesn't actually use, so that VI never loads, never calls
-# back, and g-cli times out waiting for a connection that was never coming. Same class of problem
-# Caraya already had (see below) and the same fix: search for the actual VI and hand g-cli its real
-# path directly instead of trusting alias resolution.
-#
-# The naive first attempt (take the first file named exactly "lunit.vi") grabbed a decoy:
-# "...\LabVIEW 2026\help\Astemes\LUnit.vi" - almost certainly an About/help VI, not the g-cli
-# execution engine (unlike Caraya's distinctly-named CarayaCLIExecutionEngine.vi, nothing here
-# guarantees the real target is even named exactly "lunit.vi"). So: log the "G CLI Tools" folder's
-# own contents (that's where g-cli itself went looking) and every "*lunit*.vi" match with its full
-# path, for a real answer if this guess is wrong too, then prefer a match that isn't under \help\.
-$niRoot = "${env:ProgramFiles}\National Instruments"
-$gcliToolsDir = Get-ChildItem -Path $niRoot -Directory -Filter "G CLI Tools" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-if ($gcliToolsDir) {
-    Write-Host "=== Contents of $($gcliToolsDir.FullName) ==="
-    Get-ChildItem -Path $gcliToolsDir.FullName -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_.FullName }
+# CORRECTION: the previous two commits' theory was wrong. The "G CLI Tools" folder listing (logged
+# by the version of this script that just ran) proves "...\vi.lib\G CLI Tools\lunit.vi" genuinely
+# exists - g-cli's own alias resolution was finding the RIGHT file all along. My own fuzzy
+# "*lunit*.vi" search is what picked wrong files (first an unrelated help VI, then an unrelated
+# example VI) - the file itself was never the problem. Reverting to the known-good, deterministic
+# path instead of fuzzy-searching for it.
+$labviewDir = Split-Path -Parent $lvExePath
+$lunitVi = Join-Path $labviewDir "vi.lib\G CLI Tools\lunit.vi"
+if (-not (Test-Path $lunitVi)) {
+    throw "$lunitVi not found - the sas_workshops_lib_lunit_for_g_cli package may not have installed correctly."
+}
+Write-Host "Using lunit.vi: $lunitVi"
+
+# DIAGNOSTIC: lunit.vi launches (PID reported, per --verbose) but g-cli still times out waiting for
+# it to connect back - so the file/path was never wrong, something about the callback handshake
+# itself is failing. Try the trivial built-in Echo.vi tool first, isolated from anything
+# LUnit-specific, to find out whether g-cli's callback mechanism works in this container AT ALL.
+$echoVi = Join-Path $labviewDir "vi.lib\G CLI Tools\Echo.vi"
+if (Test-Path $echoVi) {
+    Write-Host "=== Diagnostic: g-cli Echo.vi (trivial built-in tool, short timeout) ==="
+    # No `2>&1` here - with $ErrorActionPreference = "Stop", merging a native command's stderr into
+    # the pipeline turns routine stderr lines into terminating errors regardless of exit code (hit
+    # this exact bug earlier in this file's history with `vipm refresh`). Let stderr print directly
+    # and judge success only by $LASTEXITCODE.
+    & $gcli --kill --kill-timeout 5000 --timeout 60000 --verbose $echoVi -- "hello"
+    Write-Host "Echo diagnostic exit code: $LASTEXITCODE"
 } else {
-    Write-Host "No 'G CLI Tools' folder found under $niRoot"
+    Write-Host "Echo.vi not found at $echoVi - skipping diagnostic"
 }
-$allLunitVis = @(Get-ChildItem -Path $niRoot -Filter "*lunit*.vi" -Recurse -File -ErrorAction SilentlyContinue)
-Write-Host "=== All *lunit*.vi matches under $niRoot ==="
-$allLunitVis | ForEach-Object { Write-Host $_.FullName }
-$lunitVi = $null
-if (Test-Path $niRoot) {
-    $match = $allLunitVis | Where-Object { $_.FullName -notmatch '\\help\\' } | Select-Object -First 1
-    if (-not $match) { $match = $allLunitVis | Select-Object -First 1 }
-    if ($match) { $lunitVi = $match.FullName }
-}
-if (-not $lunitVi) {
-    throw "lunit.vi not found anywhere under '$niRoot' - the sas_workshops_lib_lunit_for_g_cli package may not have installed correctly."
-}
-Write-Host "Found lunit.vi: $lunitVi"
 
 Write-Host "=== Running LUnit tests ==="
 # --verbose: this failed with zero diagnostic detail last time ("Timed out waiting for app to
