@@ -18,6 +18,12 @@ $ErrorActionPreference = "Stop"
 if (Test-Path "C:\Git\cmd\git.exe") {
     $env:PATH = "C:\Git\cmd;$env:PATH"
 }
+# Matches the working configuration in https://gist.github.com/Flydroid/8b1d5540dd64db50d48cf2d84455ecfe
+# (an independent, confirmed-working recipe for this exact container/VIPM combination - see the
+# Start-VipmStack comment below for the full story).
+$env:CI = "true"
+$env:GITHUB_ACTIONS = "true"
+$env:NO_COLOR = "1"
 
 # Confirmed on 2026-09-04 CI run: the "NI Package Manager CLI" preinstalled in this image is
 # nipkg.exe (NI's own .nipkg-feed package manager) - NOT the classic VIPM CLI (vipm.exe) that
@@ -207,27 +213,116 @@ function Save-WindowScreenshots {
 }
 $DiagDir = "C:\workspace\diagnostics"
 
+# Finds LabVIEW.exe itself (not vipm.exe/g-cli.exe - Find-Tool searches by filename across NI/JKI
+# roots generically, but Start-VipmStack below needs the actual LabVIEW.exe path to launch it and
+# to read its version resource).
+function Find-LabviewExe {
+    $roots = @(
+        "${env:ProgramFiles}\National Instruments",
+        "${env:ProgramFiles(x86)}\National Instruments"
+    ) | Where-Object { Test-Path $_ }
+    foreach ($root in $roots) {
+        $candidate = Get-ChildItem -Path $root -Directory -Filter "LabVIEW*" -ErrorAction SilentlyContinue |
+            ForEach-Object { Join-Path $_.FullName "LabVIEW.exe" } |
+            Where-Object { Test-Path $_ } | Select-Object -First 1
+        if ($candidate) { return $candidate }
+    }
+    throw "Could not locate LabVIEW.exe under: $($roots -join ', ')"
+}
+
+# THE actual root cause, per https://github.com/vipm-io/vipm-desktop-issues/issues/108 (filed
+# independently against this exact nationalinstruments/labview:*-windows + VIPM CLI combination -
+# same "Failed to load Settings.ini" error, then the same "'library_list' timed out" hang we saw
+# after papering over that) and the working recipe in
+# https://gist.github.com/Flydroid/8b1d5540dd64db50d48cf2d84455ecfe:
+#
+# An EMPTY Settings.ini (the earlier fix in this file's history) gets past "file not found", but
+# leaves VIPM Desktop with no registered LabVIEW [Targets] entry to connect to - so it waits
+# forever for a target that was never configured. And per the gist: "VIPM engine (the CLI attaches
+# to it; if the CLI has to start it itself it hangs)" - exactly what our own diagnostics showed
+# (vipm.exe sitting nearly idle, LabVIEW.exe never launching, on every hang). Neither LabVIEW nor
+# VIPM Desktop can be left for the CLI to launch on demand in this container; both have to be
+# started and confirmed ready BEFORE any `vipm` command runs.
+function Start-VipmStack {
+    param([string]$LvExePath)
+    $fi = (Get-Item $LvExePath).VersionInfo
+    $ver = "{0}.{1} (64-bit)" -f $fi.ProductMajorPart, $fi.ProductMinorPart
+    $lvIniPath = "/" + (($LvExePath -replace ":", "") -replace "\\", "/")
+
+    $settingsDir = "C:\ProgramData\JKI\VIPM"
+    $settingsFile = Join-Path $settingsDir "Settings.ini"
+    if (-not (Test-Path $settingsFile)) {
+        New-Item -ItemType Directory -Force -Path $settingsDir | Out-Null
+        @"
+[General]
+check for updates on startup?="FALSE"
+Check new ver. of App. on startup?="FALSE"
+Suppress Download warning?="TRUE"
+Mass Compile After Package Install?="FALSE"
+IsFirstLaunch="FALSE"
+
+[Targets]
+Names.<size(s)>="1"
+Names 0="LabVIEW"
+Versions.<size(s)>="1"
+Versions 0="$ver"
+Locations.<size(s)>="1"
+Locations 0="$lvIniPath"
+Ports="<size(s)=1> 3363"
+Tested.<size(s)>="1"
+Tested 0="TRUE"
+Disabled.<size(s)>="1"
+Disabled 0="FALSE"
+Connection Timeout="120"
+Active Target.Name="LabVIEW"
+Active Target.Version="$ver"
+CommunityEdition.<size(s)>="1"
+CommunityEdition 0="TRUE"
+"@ | Set-Content -Path $settingsFile -Encoding ASCII
+        Write-Host "Seeded $settingsFile with a [Targets] entry for LabVIEW $ver"
+    } else {
+        Write-Host "$settingsFile already exists, leaving it alone"
+    }
+
+    if (-not (Get-Process -Name "LabVIEW" -ErrorAction SilentlyContinue)) {
+        Write-Host "Starting $LvExePath --headless"
+        Start-Process -FilePath $LvExePath -ArgumentList "--headless"
+        $deadline = (Get-Date).AddSeconds(180)
+        $ready = $false
+        while ((Get-Date) -lt $deadline) {
+            try {
+                $client = New-Object System.Net.Sockets.TcpClient
+                $client.Connect("127.0.0.1", 3363)
+                if ($client.Connected) { $client.Close(); $ready = $true; break }
+            } catch {
+                Start-Sleep -Seconds 3
+            }
+        }
+        if ($ready) { Write-Host "LabVIEW VI Server ready on port 3363" } else { Write-Host "WARNING: port 3363 never opened after 180s" }
+    } else {
+        Write-Host "LabVIEW already running"
+    }
+
+    if (-not (Get-Process -Name "VI Package Manager" -ErrorAction SilentlyContinue)) {
+        $vipmDesktopExe = "C:\Program Files\JKI\VI Package Manager\VI Package Manager.exe"
+        Write-Host "Starting $vipmDesktopExe"
+        Start-Process -FilePath $vipmDesktopExe
+        Write-Host "Waiting 45s for VIPM Desktop to initialize..."
+        Start-Sleep -Seconds 45
+    } else {
+        Write-Host "VIPM Desktop already running"
+    }
+}
+
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
 Set-LabviewIniConfig -LabviewYear $LabviewYear
-
-# Root cause, found by inspecting the Linux .deb this same project's Linux job installs: its
-# postinst script explicitly creates an EMPTY Settings.ini (`install -m 664 /dev/null
-# ".../Settings.ini"`) if one doesn't already exist - that's VIPM CLI's entire "first run"
-# bootstrap on Linux. The Windows installer has no equivalent step, so on a truly fresh install
-# `vipm install` fails with "Failed to load Settings.ini: ... cannot find the file specified."
-# (vipm refresh degrades this to a warning and limps on, which is what made it look like a timing
-# race in earlier debugging - it never was one). Fix: create the same empty placeholder ourselves.
-$vipmSettingsDir = "C:\ProgramData\JKI\VIPM"
-$vipmSettingsFile = Join-Path $vipmSettingsDir "Settings.ini"
-if (-not (Test-Path $vipmSettingsFile)) {
-    New-Item -ItemType Directory -Force -Path $vipmSettingsDir | Out-Null
-    New-Item -ItemType File -Force -Path $vipmSettingsFile | Out-Null
-    Write-Host "Created empty $vipmSettingsFile (mirrors the Linux .deb postinst's bootstrap)"
-}
+$lvExePath = Find-LabviewExe
+Write-Host "Found LabVIEW.exe: $lvExePath"
+Start-VipmStack -LvExePath $lvExePath
 
 # Recommended by https://docs.vipm.io/preview/cli/docker/ before every install, to avoid stale
-# caches. Not fatal if it warns (see comment above) - the real gate is Settings.ini existing.
+# caches.
 Write-Host "=== vipm refresh ==="
 & $vipm refresh
 if ($LASTEXITCODE -ne 0) { Write-Host "vipm refresh failed with exit $LASTEXITCODE (non-fatal)" }

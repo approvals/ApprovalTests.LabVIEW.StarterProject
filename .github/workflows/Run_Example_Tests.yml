@@ -87,10 +87,13 @@ jobs:
       # no progress reporting" would look identical from the outside at this verbosity, so turn on
       # vipm's own debug logging to actually see what it's doing during the silence.
       VIPM_DEBUG: 1
-      # Bumped well past the 600s that already proved insufficient, to find out whether this ever
-      # completes given enough time (cold LabVIEW compile of 9 packages, first run ever) or is a
-      # true deadlock that no amount of waiting fixes.
+      # Real root cause (see run-lunit-tests.ps1's Start-VipmStack): vipm.exe was left to launch
+      # LabVIEW and VIPM Desktop itself, which hangs in this container - both now get started and
+      # confirmed ready before any vipm command runs, so this should rarely matter in practice.
+      # Kept generous as a safety margin, matching the values in the independently-confirmed-working
+      # recipe at https://gist.github.com/Flydroid/8b1d5540dd64db50d48cf2d84455ecfe.
       VIPM_DESKTOP_LIVELINESS_TIMEOUT: 1800
+      VIPM_TIMEOUT: 1800
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
@@ -131,6 +134,7 @@ jobs:
             -e VIPM_DEBUG `
             -e VIPM_COMMUNITY_EDITION `
             -e VIPM_DESKTOP_LIVELINESS_TIMEOUT `
+            -e VIPM_TIMEOUT `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-lunit-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
@@ -187,10 +191,13 @@ jobs:
       # no progress reporting" would look identical from the outside at this verbosity, so turn on
       # vipm's own debug logging to actually see what it's doing during the silence.
       VIPM_DEBUG: 1
-      # Bumped well past the 600s that already proved insufficient, to find out whether this ever
-      # completes given enough time (cold LabVIEW compile of 9 packages, first run ever) or is a
-      # true deadlock that no amount of waiting fixes.
+      # Real root cause (see run-caraya-tests.ps1's Start-VipmStack): vipm.exe was left to launch
+      # LabVIEW and VIPM Desktop itself, which hangs in this container - both now get started and
+      # confirmed ready before any vipm command runs, so this should rarely matter in practice.
+      # Kept generous as a safety margin, matching the values in the independently-confirmed-working
+      # recipe at https://gist.github.com/Flydroid/8b1d5540dd64db50d48cf2d84455ecfe.
       VIPM_DESKTOP_LIVELINESS_TIMEOUT: 1800
+      VIPM_TIMEOUT: 1800
       # Forces VIPM to run as Community Edition rather than requiring `vipm activate` with a Pro
       # serial - same purpose as the Linux job's VIPM_COMMUNITY_EDITION. Missing on the Windows
       # job's first CI run caused `vipm install` to fail loading Settings.ini (exit code 8) since
@@ -230,6 +237,7 @@ jobs:
             -e VIPM_DEBUG `
             -e VIPM_COMMUNITY_EDITION `
             -e VIPM_DESKTOP_LIVELINESS_TIMEOUT `
+            -e VIPM_TIMEOUT `
             nationalinstruments/labview:${{ env.LABVIEW_IMAGE }} `
             powershell -File "C:\workspace\scripts\windows\run-caraya-tests.ps1" `
               -LabviewYear ${{ env.LABVIEW_VERSION_YEAR }} `
