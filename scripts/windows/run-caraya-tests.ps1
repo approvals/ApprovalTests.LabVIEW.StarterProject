@@ -68,20 +68,31 @@ function Find-Tool {
     throw "Could not locate $Name on PATH or under: $($roots -join ', ')"
 }
 
-# UNVERIFIED GUESS, not yet confirmed from a log line: against the LUnit job (same image),
-# `vipm install` reached "[VIPM] 105.9%" and then produced literally zero further output for the
-# full 600s liveliness timeout - a genuine hang, not slow progress. VIPM Desktop launches LabVIEW
-# itself to actually apply packages; the leading theory, by analogy with the Linux job's
-# setup_container.sh (which writes labview.conf keys like autoerr=3 for exactly this reason - see
-# https://forums.ni.com/t5/Continuous-Integration/Preemptively-disable-internal-error-dialog/td-p/4407330),
-# is that LabVIEW hit an internal dialog with no one to click it in a headless container. This
-# pre-seeds the Windows equivalent (LabVIEW.ini) with the same keys before anything launches
-# LabVIEW. If the hang recurs anyway, this theory was wrong and the ini edit did nothing harmful.
-function Set-LabviewDialogSuppression {
+# The dialog-suppression theory (below) turned out to be moot either way: window/process
+# diagnostics from a CI run against the LUnit job (same image) showed LabVIEW.exe never launches
+# at all during the hang, and VIPM Desktop (the "VI Package Manager" process) sits nearly idle
+# (~4s of CPU burned across 105s of wall time) rather than actually computing - a real blocked
+# wait, not a dialog and not slow work. The leading theory now: VIPM has driven LabVIEW via VI
+# Server (or the ActiveX equivalent on Windows) for package installs for a very long time, and per
+# https://github.com/ni/labview-for-containers' own windows-custom-images.md, the DIY custom-image
+# build process has to explicitly drop in a LabVIEW.ini "to enable VI Server and other required
+# INI tokens" and warns that skipping it "will break LabVIEWCLI operations" - implying a stock
+# install's default ini does NOT have VI Server on. If it's off, VIPM Desktop can't ask LabVIEW to
+# do anything and would plausibly sit exactly like this: alive, blocked on an unanswered
+# connection, with no reason to ever even launch LabVIEW.exe.
+#
+# This function never actually confirmed VI Server's prior state - if LabVIEW.ini didn't already
+# exist, the old version of this function would have CREATED it containing only the
+# dialog-suppression keys below, with no VI Server keys at all. It now logs the full before/after
+# content (so that question has a real answer in the log) and adds the standard VI Server
+# enablement keys alongside dialog suppression. Port 3363 and "+*" access are LabVIEW's
+# long-standing conventional defaults for these tokens; unlike the other keys here, this hasn't
+# been confirmed against this specific image's documentation.
+function Set-LabviewIniConfig {
     param([int]$LabviewYear)
     $labviewDir = "${env:ProgramFiles}\National Instruments\LabVIEW $LabviewYear"
     if (-not (Test-Path $labviewDir)) {
-        Write-Host "LabVIEW install dir not found at '$labviewDir' - skipping dialog suppression"
+        Write-Host "LabVIEW install dir not found at '$labviewDir' - skipping ini config"
         return
     }
     $iniPath = Join-Path $labviewDir "LabVIEW.ini"
@@ -94,7 +105,13 @@ function Set-LabviewDialogSuppression {
         "NIERSendDialogClose"          = "True"
         "DWarnDialog"                  = "False"
         "promoteDWarnInternals"        = "False"
+        "server.tcp.enabled"           = "True"
+        "server.tcp.port"              = "3363"
+        "server.tcp.access"            = "+*"
+        "server.vi.callsEnabled"       = "True"
     }
+    Write-Host "=== $iniPath BEFORE edit ==="
+    if (Test-Path $iniPath) { Get-Content -Path $iniPath | ForEach-Object { Write-Host $_ } } else { Write-Host "(file does not exist yet)" }
     $lines = [System.Collections.Generic.List[string]]::new()
     if (Test-Path $iniPath) { (Get-Content -Path $iniPath) | ForEach-Object { $lines.Add($_) } }
     $sectionIndex = ($lines | Select-String -Pattern '^\s*\[LabVIEW\]\s*$' -SimpleMatch:$false).LineNumber
@@ -122,12 +139,13 @@ function Set-LabviewDialogSuppression {
         }
     }
     Set-Content -Path $iniPath -Value $lines
-    Write-Host "Updated $iniPath with dialog-suppression keys"
+    Write-Host "=== $iniPath AFTER edit ==="
+    Get-Content -Path $iniPath | ForEach-Object { Write-Host $_ }
 }
 
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
-Set-LabviewDialogSuppression -LabviewYear $LabviewYear
+Set-LabviewIniConfig -LabviewYear $LabviewYear
 
 # Root cause, found by inspecting the Linux .deb this same project's Linux job installs: its
 # postinst script explicitly creates an EMPTY Settings.ini (`install -m 664 /dev/null
