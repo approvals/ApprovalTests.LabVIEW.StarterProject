@@ -65,7 +65,16 @@ function Find-Tool {
         Write-Host "Found $($found.Count) candidate(s): $($found.FullName -join ', ')"
         return $found[0].FullName
     }
-    throw "Could not locate $Name on PATH or under: $($roots -join ', ')"
+    # Confirmed on CI: wiresmith_technology_lib_g_cli's VIPM package does NOT install g-cli.exe
+    # under National Instruments or JKI - widen to the whole Program Files trees before giving up.
+    $wideRoots = @("${env:ProgramFiles}", "${env:ProgramFiles(x86)}") | Where-Object { $_ -and (Test-Path $_) }
+    Write-Host "$Name not found under NI/JKI roots either - widening search to: $($wideRoots -join ', ')"
+    $found = @($wideRoots | ForEach-Object { Get-ChildItem -Path $_ -Filter $Name -Recurse -File -ErrorAction SilentlyContinue })
+    if ($found.Count -gt 0) {
+        Write-Host "Found $($found.Count) candidate(s): $($found.FullName -join ', ')"
+        return $found[0].FullName
+    }
+    throw "Could not locate $Name on PATH or under: $($roots -join ', '), $($wideRoots -join ', ')"
 }
 
 # The dialog-suppression theory (below) turned out to be moot either way: window/process
@@ -357,8 +366,11 @@ while (-not $smokeProc.HasExited -and $waited -lt 150) {
 }
 if (-not $smokeProc.HasExited) {
     Write-Host "Still running after ${waited}s - waiting for it to exit on its own"
-    $smokeProc.WaitForExit()
 }
+# .NET quirk: ExitCode can read back empty unless WaitForExit() is called at least once, even if
+# HasExited already reads true - confirmed on CI (printed "(exit )" with no code) - so call it
+# unconditionally rather than only in the "still running" branch above.
+$smokeProc.WaitForExit()
 $smokeTestExit = $smokeProc.ExitCode
 $env:VIPM_DESKTOP_LIVELINESS_TIMEOUT = $prevTimeout
 if ($smokeTestExit -eq 0) {
