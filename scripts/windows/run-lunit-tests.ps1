@@ -416,5 +416,12 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force }
 
 Write-Host "=== Running LUnit tests ==="
-& $gcli --kill --kill-timeout 5000 lunit -- -r $ReportPath $ProjectPath
+# --verbose: this failed with zero diagnostic detail last time ("Timed out waiting for app to
+# connect to g-cli" and nothing else) - g-cli's own [DEBUG] output (see
+# https://github.com/G-CLI/G-CLI/issues/171) shows what it actually launched and whether the
+# process even started, which is exactly what's missing to make progress here.
+# --timeout 300000: the failure hit at ~90s both times, close to what looks like a short default:
+# a cold LabVIEW launch in this container has taken minutes elsewhere in this same script (LabVIEW
+# --headless plus VIPM Desktop startup alone took over a minute), so 90s may simply not be enough.
+& $gcli --kill --kill-timeout 5000 --timeout 300000 --verbose lunit -- -r $ReportPath $ProjectPath
 exit $LASTEXITCODE

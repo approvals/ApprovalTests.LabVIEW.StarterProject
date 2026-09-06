@@ -351,5 +351,8 @@ New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force }
 
 Write-Host "=== Running Caraya tests ==="
-& $gcli --kill --kill-timeout 5000 --lv-ver $LabviewYear $carayaEngine -- -s $TestPath -x $ReportPath
+# --verbose/--timeout: see the matching comment in run-lunit-tests.ps1 - against that job (same
+# image), this failed with zero diagnostic detail at ~90s, which looks like a short default rather
+# than a real deadlock.
+& $gcli --kill --kill-timeout 5000 --timeout 300000 --verbose --lv-ver $LabviewYear $carayaEngine -- -s $TestPath -x $ReportPath
 exit $LASTEXITCODE
