@@ -323,8 +323,35 @@ CommunityEdition 0="TRUE"
     }
 }
 
+# The Linux job's setup_container.sh starts this explicitly, commented "needed for g-cli":
+#   nohup nisvcloc >/dev/null & sleep 3
+# Missed entirely when porting to Windows - and it fits the g-cli symptom exactly: LabVIEW.exe
+# launches and gets a PID (confirmed via g-cli's own --verbose output) but the VI never calls back,
+# for the trivial built-in Echo.vi just as much as for lunit.vi, consistent with the launched VI
+# having no service locator to announce itself through rather than anything wrong with the VI
+# itself or its target LabVIEW instance.
+function Start-NiServiceLocator {
+    $roots = @(
+        "${env:ProgramFiles}\National Instruments",
+        "${env:ProgramFiles(x86)}\National Instruments"
+    ) | Where-Object { Test-Path $_ }
+    $nisvcloc = $roots | ForEach-Object { Get-ChildItem -Path $_ -Filter "nisvcloc.exe" -Recurse -File -ErrorAction SilentlyContinue } | Select-Object -First 1
+    if (-not $nisvcloc) {
+        Write-Host "nisvcloc.exe not found under $($roots -join ', ')"
+        return
+    }
+    if (Get-Process -Name "nisvcloc" -ErrorAction SilentlyContinue) {
+        Write-Host "nisvcloc already running"
+        return
+    }
+    Write-Host "Starting $($nisvcloc.FullName)"
+    Start-Process -FilePath $nisvcloc.FullName
+    Start-Sleep -Seconds 3
+}
+
 Install-Vipm
 $vipm = Find-Tool -Name "vipm.exe"
+Start-NiServiceLocator
 Set-LabviewIniConfig -LabviewYear $LabviewYear
 $lvExePath = Find-LabviewExe
 Write-Host "Found LabVIEW.exe: $lvExePath"
