@@ -415,6 +415,24 @@ $reportDir = Split-Path -Parent $ReportPath
 New-Item -ItemType Directory -Force -Path $reportDir | Out-Null
 if (Test-Path $ReportPath) { Remove-Item $ReportPath -Force }
 
+# The bare "lunit" alias doesn't resolve correctly: --verbose (added while chasing the previous
+# hang) showed g-cli falling back to "Checking in vi.lib/G CLI Tools instead" and launching LabVIEW
+# pointed at "...\vi.lib\G CLI Tools\lunit.vi" - a path the sas_workshops_lib_lunit_for_g_cli
+# package's Windows install apparently doesn't actually use, so that VI never loads, never calls
+# back, and g-cli times out waiting for a connection that was never coming. Same class of problem
+# Caraya already had (see below) and the same fix: search for the actual VI and hand g-cli its real
+# path directly instead of trusting alias resolution.
+$niRoot = "${env:ProgramFiles}\National Instruments"
+$lunitVi = $null
+if (Test-Path $niRoot) {
+    $match = Get-ChildItem -Path $niRoot -Filter "lunit.vi" -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($match) { $lunitVi = $match.FullName }
+}
+if (-not $lunitVi) {
+    throw "lunit.vi not found anywhere under '$niRoot' - the sas_workshops_lib_lunit_for_g_cli package may not have installed correctly."
+}
+Write-Host "Found lunit.vi: $lunitVi"
+
 Write-Host "=== Running LUnit tests ==="
 # --verbose: this failed with zero diagnostic detail last time ("Timed out waiting for app to
 # connect to g-cli" and nothing else) - g-cli's own [DEBUG] output (see
@@ -423,5 +441,5 @@ Write-Host "=== Running LUnit tests ==="
 # --timeout 300000: the failure hit at ~90s both times, close to what looks like a short default:
 # a cold LabVIEW launch in this container has taken minutes elsewhere in this same script (LabVIEW
 # --headless plus VIPM Desktop startup alone took over a minute), so 90s may simply not be enough.
-& $gcli --kill --kill-timeout 5000 --timeout 300000 --verbose lunit -- -r $ReportPath $ProjectPath
+& $gcli --kill --kill-timeout 5000 --timeout 300000 --verbose $lunitVi -- -r $ReportPath $ProjectPath
 exit $LASTEXITCODE
