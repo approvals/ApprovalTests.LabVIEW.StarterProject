@@ -359,6 +359,18 @@ Get-Process -Name "LabVIEW" -ErrorAction SilentlyContinue | Stop-Process -Force 
 Get-Process -Name "VI Package Manager" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 3
 
+# ROOT CAUSE (found by comparing against elijah286/LabVIEW-CI-with-Containers and NI's own
+# docs/headless-labview.md): g-cli launches LabVIEW.exe DIRECTLY rather than through
+# `LabVIEWCLI -Headless`, and starting with LabVIEW 2026 Q1 a container only licenses the headless
+# automation path - a direct launch comes up looking for UI/activation and never completes the
+# handshake g-cli is waiting on (this is what produced the LUnit job's "Timed out waiting for app
+# to connect to g-cli" even though the process gets a PID). Setting LV_RTE_HEADLESS=1 is NI's
+# documented global override that forces every LabVIEW launch (direct or not) to run headless
+# without needing the flag passed explicitly. It must NOT be set any earlier than this: VIPM
+# Desktop is itself a LabVIEW-runtime app, and under this global default its own startup handshake
+# (which Start-VipmStack above depends on) never completes either.
+$env:LV_RTE_HEADLESS = "1"
+
 # Locate the Caraya CLI extension VI by searching rather than guessing the LabVIEW install path
 # (the equivalent guess for vipm.exe/g-cli.exe above was wrong on the first real CI run).
 $niRoot = "${env:ProgramFiles}\National Instruments"
