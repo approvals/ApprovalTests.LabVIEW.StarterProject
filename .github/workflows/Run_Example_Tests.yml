@@ -16,6 +16,11 @@ on:
         description: 'Ref of this repo to check out. Defaults to the ref that triggered the run, which is wrong when called from another repo, so callers should always set this explicitly.'
         type: string
         required: false
+      skip_cache_save:
+        description: 'When true, the LUnit/Caraya VIPM caches are only restored, never saved back at the end. Set by external callers (e.g. ApprovalTests.LabVIEW CI) so their runs cannot write into this repo''s own cache.'
+        type: boolean
+        required: false
+        default: false
 env:
   PACKAGE_VERSION: 3.0.0
 permissions:
@@ -86,9 +91,9 @@ jobs:
         run: |
           ./scripts/setup_container.sh
       # Use GitHub's caching action to cache VIPM's package cache.
-      - name: Cache VIPM packages
+      - name: Restore VIPM packages cache
         id: cache-vipm
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         env:
           # Increment this to invalidate the cache (restore-keys included).
           # Bumped: suspect a cache-hit restores package *files* without whatever post-install
@@ -144,6 +149,20 @@ jobs:
         run: |
           source ./scripts/setup_display.sh
           vipm list --installed || true
+
+      # Only save on a cache miss (nothing new to save on a hit) and only when the caller
+      # hasn't asked for read-only cache use (e.g. ApprovalTests.LabVIEW's CI calling this
+      # workflow via workflow_call) - so external callers pull from this repo's cache but
+      # never write their own installs back into it.
+      - name: Save VIPM packages cache
+        if: steps.cache-vipm.outputs.cache-hit != 'true' && inputs.skip_cache_save != true
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            /usr/local/natinst/LabVIEW*/
+            /usr/local/jki/vipm/cache/
+            /usr/local/jki/vipm/db/
+          key: ${{ steps.cache-vipm.outputs.cache-primary-key }}
 
       - name: Unit Tests
         run: |
@@ -210,9 +229,9 @@ jobs:
         run: |
           ./scripts/setup_container.sh
       # Use GitHub's caching action to cache VIPM's package cache.
-      - name: Cache VIPM packages
+      - name: Restore VIPM packages cache
         id: cache-vipm
-        uses: actions/cache@v5
+        uses: actions/cache/restore@v5
         env:
           # Increment this to invalidate the cache (restore-keys included).
           CACHE_VERSION: 2
@@ -266,12 +285,26 @@ jobs:
           source ./scripts/setup_display.sh
           vipm list --installed || true
 
+      # Only save on a cache miss (nothing new to save on a hit) and only when the caller
+      # hasn't asked for read-only cache use (e.g. ApprovalTests.LabVIEW's CI calling this
+      # workflow via workflow_call) - so external callers pull from this repo's cache but
+      # never write their own installs back into it.
+      - name: Save VIPM packages cache
+        if: steps.cache-vipm.outputs.cache-hit != 'true' && inputs.skip_cache_save != true
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            /usr/local/natinst/LabVIEW*/
+            /usr/local/jki/vipm/cache/
+            /usr/local/jki/vipm/db/
+          key: ${{ steps.cache-vipm.outputs.cache-primary-key }}
+
       - name: Unit Tests
         run: |
           source ./scripts/setup_display.sh
           mkdir -p reports
           rm reports/Caraya.UnitTestReport.xml || true
-          g-cli ${kill} --timeout 180000 Caraya -- -s "Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml" 
+          g-cli ${kill} --timeout 180000 Caraya -- -s "Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml"
 
           
       - name: Publish Test Report
