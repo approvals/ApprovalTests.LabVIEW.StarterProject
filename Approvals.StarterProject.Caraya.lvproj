@@ -14,10 +14,12 @@
 		<Property Name="server.vi.propertiesEnabled" Type="Bool">true</Property>
 		<Property Name="specify.custom.address" Type="Bool">false</Property>
 		<Item Name="Simple Tests" Type="Folder">
-			<Item Name="Test Hello World.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Test Hello World.approved.txt"/>
 			<Item Name="Verify Hello World.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Hello World.vi"/>
+			<Item Name="Verify Hello World.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Hello World.approved.txt"/>
 		</Item>
 		<Item Name="lib_Caraya.Extension.lvlib" Type="Library" URL="/&lt;vilib&gt;/SAS/Approval Tests/Extensions/Caraya.Extension/lib_Caraya.Extension.lvlib"/>
+		<Item Name="Run Simple Tests.vi" Type="VI" URL="../Caraya.Tests/Run Simple Tests.vi"/>
+		<Item Name="Run All Tests.vi" Type="VI" URL="../Caraya.Tests/Run All Tests.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
 		<Item Name="Build Specifications" Type="Build"/>
 	</Item>
