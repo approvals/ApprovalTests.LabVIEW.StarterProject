@@ -15,6 +15,7 @@
 		<Property Name="specify.custom.address" Type="Bool">false</Property>
 		<Item Name="Common" Type="Folder">
 			<Item Name="Person.lvclass" Type="LVClass" URL="../Common/Person/Person.lvclass"/>
+			<Item Name="MyAnd.vi" Type="VI" URL="../Common/MyAnd.vi"/>
 		</Item>
 		<Item Name="Tests" Type="Folder">
 			<Item Name="Simple Tests.lvclass" Type="LVClass" URL="../Lunit.Tests/Simple Tests/Simple Tests.lvclass"/>
