@@ -101,10 +101,10 @@ jobs:
             /usr/local/jki/vipm/cache/
             /usr/local/jki/vipm/db/
           # Key includes hashes of the project package manifests (.vipc and .dragon files)
-          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('Approvals.StarterProject.Lunit.vipc') }}
+          key: vipm-lunit-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('Approvals.StarterProject.Lunit.vipc') }}
           restore-keys: |
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
+            vipm-lunit-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
+            vipm-lunit-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
 
       # Must run every time, regardless of cache-hit: this is the only thing that starts LabVIEW,
       # and every later step (VIPM installs/listing, the tests themselves) needs it running.
@@ -171,7 +171,7 @@ jobs:
 
 # Get LUnit running first
   Caraya:
-    if: false 
+    needs: Pylavi
     runs-on: ubuntu-latest
     # LabVIEW container defaults to `sh`. Set it to `bash`, so there are no surprises with syntax in the steps.
     defaults:
@@ -218,7 +218,71 @@ jobs:
             /usr/local/jki/vipm/cache/
             /usr/local/jki/vipm/db/
           # Key includes hashes of the project package manifests (.vipc and .dragon files)
-          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('approvals-dev.vipc', 'error.dragon') }}
+          key: vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-${{ hashFiles('Approvals.StarterProject.Caraya.vipc') }}
           restore-keys: |
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
-            vipm-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
+            vipm-caraya-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-${{ env.VIPM_VERSION }}-
+            vipm-caraya-v${{ env.CACHE_VERSION }}-${{ runner.os }}-${{ env.LABVIEW_IMAGE }}-
+
+              # Must run every time, regardless of cache-hit: this is the only thing that starts LabVIEW,
+      # and every later step (VIPM installs/listing, the tests themselves) needs it running.
+      # Previously this lived inside "VIPM Install Packages" below, which is skipped on a cache
+      # hit - so on a cache hit LabVIEW was never started, and VIPM/tests ran against no LabVIEW
+      # instance at all.
+      - name: Start LabVIEW
+        run: |
+          source ./scripts/setup_display.sh
+          echo "Starting LabVIEW"
+          /usr/local/natinst/LabVIEW-${LABVIEW_VERSION_YEAR}-64/labview --headless &
+
+      - name: VIPM Install Packages
+        if: steps.cache-vipm.outputs.cache-hit != 'true'
+        run: |
+          source ./scripts/setup_display.sh
+          vipm install "Approvals.StarterProject.Caraya.vipc" --show-progress --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 # --verbose
+
+      - name: Download Approval Tests package
+        # Same workflow run as the caller (workflow_call jobs execute inside the caller's run),
+        # so no cross-repo repository/run-id/token is needed - just the artifact name.
+        if: inputs.package_artifact_name != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.package_artifact_name }}
+          path: downloaded-package
+
+      - name: Install downloaded Approval Tests package
+        if: inputs.package_artifact_name != ''
+        run: |
+          source ./scripts/setup_display.sh
+          package=$(ls downloaded-package/*.vip)
+          echo "Installing freshly built package: ${package}"
+          vipm install "${package}" --labview-version ${LABVIEW_VERSION_YEAR} --labview-bitness 64 --show-progress
+
+      - name: VIPM List Installed packages
+        run: |
+          source ./scripts/setup_display.sh
+          vipm list --installed || true
+
+      - name: Unit Tests
+        run: |
+          source ./scripts/setup_display.sh
+          mkdir -p reports
+          rm reports/Caraya.UnitTestReport.xml || true
+          g-cli ${kill} --timeout 180000 Caraya -- -s"Approvals.StarterProject.Caraya.lvproj" -x "reports/Caraya.UnitTestReport.xml" 
+
+          
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v6
+        if: success() || failure() # always run even if the previous step fails
+        with:
+          report_paths: 'reports/*UnitTestReport.xml'
+          include_passed: true
+          
+      - name: Grab Artifacts
+        if: success() || failure() # always run even if the previous step fails
+        uses: actions/upload-artifact@v6
+        with:
+          name: caraya-test-reports 
+          path: |
+            reports/*UnitTestReport.xml
+            **/*.received.*
+
