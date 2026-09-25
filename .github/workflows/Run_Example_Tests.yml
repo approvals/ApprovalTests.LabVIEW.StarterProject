@@ -201,6 +201,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
+          # Pinned explicitly: when called via workflow_call from another repo, the default
+          # checkout target is the CALLER's repo/ref, not this one.
+          repository: approvals/ApprovalTests.LabVIEW.StarterProject
+          ref: ${{ inputs.starter_ref || github.ref }}
           submodules: recursive
       - name: Setup Container
         run: |
