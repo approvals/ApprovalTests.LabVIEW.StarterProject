@@ -267,7 +267,7 @@ jobs:
           source ./scripts/setup_display.sh
           mkdir -p reports
           rm reports/Caraya.UnitTestReport.xml || true
-          g-cli ${kill} --timeout 180000 Caraya -- -s"Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml" 
+          g-cli ${kill} --timeout 180000 Caraya -- -s "Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml" 
 
           
       - name: Publish Test Report
