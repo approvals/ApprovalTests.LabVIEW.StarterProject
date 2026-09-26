@@ -16,8 +16,17 @@
 		<Item Name="Simple Tests" Type="Folder">
 			<Item Name="Verify Hello World.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Hello World.vi"/>
 			<Item Name="Verify Hello World.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Hello World.approved.txt"/>
+			<Item Name="Verify Array of Strings.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Array of Strings.vi"/>
+			<Item Name="Verify Array of Strings.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Array of Strings.approved.txt"/>
+			<Item Name="Verify Person.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Person.vi"/>
+			<Item Name="Verify Person.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Person.approved.txt"/>
+			<Item Name="Verify Person as JSON.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Person as JSON.vi"/>
+			<Item Name="Verify Person as JSON.approved.json" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Person as JSON.approved.json"/>
+			<Item Name="Verify Array of Numbers.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Array of Numbers.vi"/>
+			<Item Name="Verify Array of Numbers.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Array of Numbers.approved.txt"/>
+			<Item Name="Verify Array of Integers.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Array of Integers.vi"/>
+			<Item Name="Verify Array of Integers.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Array of Integers.approved.txt"/>
 		</Item>
-		<Item Name="lib_Caraya.Extension.lvlib" Type="Library" URL="/&lt;vilib&gt;/SAS/Approval Tests/Extensions/Caraya.Extension/lib_Caraya.Extension.lvlib"/>
 		<Item Name="Run Simple Tests.vi" Type="VI" URL="../Caraya.Tests/Run Simple Tests.vi"/>
 		<Item Name="Run All Tests.vi" Type="VI" URL="../Caraya.Tests/Run All Tests.vi"/>
 		<Item Name="Dependencies" Type="Dependencies"/>
