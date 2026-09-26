@@ -26,6 +26,10 @@
 			<Item Name="Verify Array of Numbers.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Array of Numbers.approved.txt"/>
 			<Item Name="Verify Array of Integers.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify Array of Integers.vi"/>
 			<Item Name="Verify Array of Integers.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify Array of Integers.approved.txt"/>
+			<Item Name="Verify MyAnd Parameterized.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify MyAnd Parameterized.vi"/>
+			<Item Name="Verify MyAnd Parameterized.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify MyAnd Parameterized.approved.txt"/>
+			<Item Name="Verify MyAnd Combinations.vi" Type="VI" URL="../Caraya.Tests/Simple Tests/Verify MyAnd Combinations.vi"/>
+			<Item Name="Verify MyAnd Combinations.approved.txt" Type="Document" URL="../Caraya.Tests/Simple Tests/Verify MyAnd Combinations.approved.txt"/>
 		</Item>
 		<Item Name="Run Simple Tests.vi" Type="VI" URL="../Caraya.Tests/Run Simple Tests.vi"/>
 		<Item Name="Run All Tests.vi" Type="VI" URL="../Caraya.Tests/Run All Tests.vi"/>
