@@ -161,12 +161,24 @@ jobs:
           source ./scripts/setup_display.sh
           vipm list --installed || true
 
-      # Only save on a cache miss (nothing new to save on a hit) and only when the caller
-      # hasn't asked for read-only cache use (e.g. ApprovalTests.LabVIEW's CI calling this
-      # workflow via workflow_call) - so external callers pull from this repo's cache but
-      # never write their own installs back into it.
+      - name: Unit Tests
+        run: |
+          source ./scripts/setup_display.sh
+          mkdir -p reports
+          rm reports/Lunit.UnitTestReport.xml || true
+          g-cli --kill --kill-timeout 5000  lunit -- -r reports/Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
+
+      # Saved only AFTER the tests, and only if every step so far succeeded, so a run that
+      # fails (install or tests) can never write a cache entry. Also skipped on a cache hit
+      # (nothing new to save), when the caller asked for read-only cache use (skip_cache_save,
+      # e.g. ApprovalTests.LabVIEW's CI via workflow_call), and when a freshly built package
+      # artifact was installed on top - that must not get baked into this repo's cache.
       - name: Save VIPM packages cache
-        if: steps.cache-vipm.outputs.cache-hit != 'true' && inputs.skip_cache_save != true
+        if: >-
+          success() &&
+          steps.cache-vipm.outputs.cache-hit != 'true' &&
+          inputs.skip_cache_save != true &&
+          inputs.package_artifact_name == ''
         uses: actions/cache/save@v5
         with:
           path: |
@@ -174,13 +186,6 @@ jobs:
             /usr/local/jki/vipm/cache/
             /usr/local/jki/vipm/db/
           key: ${{ steps.cache-vipm.outputs.cache-primary-key }}
-
-      - name: Unit Tests
-        run: |
-          source ./scripts/setup_display.sh
-          mkdir -p reports
-          rm reports/Lunit.UnitTestReport.xml || true
-          g-cli --kill --kill-timeout 5000  lunit -- -r reports/Lunit.UnitTestReport.xml Approvals.StarterProject.Lunit.lvproj
 
           
       - name: Publish Test Report
@@ -307,12 +312,20 @@ jobs:
           source ./scripts/setup_display.sh
           vipm list --installed || true
 
-      # Only save on a cache miss (nothing new to save on a hit) and only when the caller
-      # hasn't asked for read-only cache use (e.g. ApprovalTests.LabVIEW's CI calling this
-      # workflow via workflow_call) - so external callers pull from this repo's cache but
-      # never write their own installs back into it.
+      - name: Unit Tests
+        run: |
+          source ./scripts/setup_display.sh
+          mkdir -p reports
+          rm reports/Caraya.UnitTestReport.xml || true
+          g-cli ${kill} --timeout 180000 Caraya -- -s "Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml"
+
+      # See the LUnit job: saved only after the tests pass, never on a failed run.
       - name: Save VIPM packages cache
-        if: steps.cache-vipm.outputs.cache-hit != 'true' && inputs.skip_cache_save != true
+        if: >-
+          success() &&
+          steps.cache-vipm.outputs.cache-hit != 'true' &&
+          inputs.skip_cache_save != true &&
+          inputs.package_artifact_name == ''
         uses: actions/cache/save@v5
         with:
           path: |
@@ -320,13 +333,6 @@ jobs:
             /usr/local/jki/vipm/cache/
             /usr/local/jki/vipm/db/
           key: ${{ steps.cache-vipm.outputs.cache-primary-key }}
-
-      - name: Unit Tests
-        run: |
-          source ./scripts/setup_display.sh
-          mkdir -p reports
-          rm reports/Caraya.UnitTestReport.xml || true
-          g-cli ${kill} --timeout 180000 Caraya -- -s "Caraya.Tests/Run All Tests.vi" -x "reports/Caraya.UnitTestReport.xml"
 
           
       - name: Publish Test Report
